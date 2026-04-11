@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "FB Schedule Dashboard",
+  "version": "0.1.0",
+  "description": "Forbiz FE 일정 대시보드 - 주간 T/OT/MM 분석",
+  "permissions": ["activeTab", "scripting", "webNavigation"],
+  "host_permissions": ["https://gw.forbiz.co.kr/*"],
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "FE Schedule Dashboard",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://gw.forbiz.co.kr/*"],
+      "js": ["content.js"],
+      "all_frames": true,
+      "run_at": "document_idle"
+    }
+  ]
+}

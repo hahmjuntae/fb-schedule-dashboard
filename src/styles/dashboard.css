@@ -1,0 +1,565 @@
+/* ===== FSD: FB Schedule Dashboard — Flat Dashboard System ===== */
+
+/* Pretendard Font (fallback to system) */
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@1.3.9/dist/web/static/pretendard.css');
+
+:root {
+  --fsd-font: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Segoe UI', sans-serif;
+
+  /* Vercel Colors */
+  --fsd-black: #171717;
+  --fsd-white: #ffffff;
+  --fsd-gray-50: #fafafa;
+  --fsd-gray-100: #ebebeb;
+  --fsd-gray-200: #e0e0e0;
+  --fsd-gray-400: #808080;
+  --fsd-gray-500: #666666;
+  --fsd-gray-600: #4d4d4d;
+  --fsd-gray-900: #171717;
+
+  /* Functional Accents */
+  --fsd-blue: #0a72ef;
+  --fsd-pink: #de1d8d;
+  --fsd-red: #ff5b4f;
+  --fsd-link: #0072f5;
+  --fsd-focus: hsla(212, 100%, 48%, 1);
+
+  /* Shadows */
+  --fsd-shadow-border: rgba(0, 0, 0, 0.08) 0px 0px 0px 1px;
+  --fsd-shadow-card: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, rgba(0,0,0,0.04) 0px 8px 8px -8px, #fafafa 0px 0px 0px 1px inset;
+  --fsd-shadow-elevated: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.06) 0px 4px 12px, rgba(0,0,0,0.04) 0px 16px 32px -8px;
+
+  /* Radius */
+  --fsd-radius-sm: 6px;
+  --fsd-radius-md: 8px;
+  --fsd-radius-lg: 8px;
+  --fsd-radius-pill: 9999px;
+}
+
+/* ===== Overlay ===== */
+#fsd-dashboard .fsd-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: hsla(0, 0%, 98%, 0.8);
+  backdrop-filter: blur(4px);
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--fsd-font);
+  font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== Modal ===== */
+#fsd-dashboard .fsd-modal {
+  background: var(--fsd-white);
+  color: var(--fsd-black);
+  border-radius: var(--fsd-radius-lg);
+  width: 95vw;
+  max-width: 1400px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--fsd-shadow-elevated);
+}
+
+#fsd-dashboard .fsd-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  box-shadow: var(--fsd-shadow-border);
+}
+
+#fsd-dashboard .fsd-modal-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--fsd-gray-900);
+}
+
+#fsd-dashboard .fsd-modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* ===== Close Button ===== */
+#fsd-dashboard .fsd-close-btn,
+#fsd-dashboard .fsd-close-detail {
+  background: none;
+  border: none;
+  color: var(--fsd-gray-400);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--fsd-radius-sm);
+  transition: color 0.15s, background 0.15s;
+}
+#fsd-dashboard .fsd-close-btn:hover,
+#fsd-dashboard .fsd-close-detail:hover {
+  color: var(--fsd-black);
+  background: var(--fsd-gray-50);
+}
+
+/* ===== Section ===== */
+#fsd-dashboard .fsd-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  margin: 0 0 16px;
+  color: var(--fsd-gray-900);
+  font-family: var(--fsd-font);
+}
+
+/* ===== Summary Table ===== */
+#fsd-dashboard .fsd-table-wrap {
+  overflow-x: auto;
+  margin-bottom: 24px;
+  border-radius: var(--fsd-radius-md);
+  box-shadow: var(--fsd-shadow-card);
+}
+
+#fsd-dashboard .fsd-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+#fsd-dashboard .fsd-table th {
+  background: var(--fsd-gray-50);
+  color: var(--fsd-gray-600);
+  padding: 10px 14px;
+  text-align: center;
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: 0;
+  position: sticky;
+  top: 0;
+  border-bottom: 1px solid var(--fsd-gray-100);
+}
+
+#fsd-dashboard .fsd-table td {
+  padding: 10px 14px;
+  text-align: center;
+  border-bottom: 1px solid var(--fsd-gray-100);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+#fsd-dashboard .fsd-table tbody tr {
+  transition: background 0.1s;
+}
+#fsd-dashboard .fsd-table tbody tr:hover {
+  background: var(--fsd-gray-50);
+}
+
+#fsd-dashboard .fsd-name-cell {
+  font-weight: 600;
+  color: var(--fsd-gray-900);
+  text-align: center;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+#fsd-dashboard .fsd-name-main {
+  white-space: nowrap;
+}
+
+#fsd-dashboard .fsd-total-warning {
+  margin-top: 3px;
+  color: var(--fsd-red);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+#fsd-dashboard .fsd-cell-empty {
+  color: var(--fsd-gray-200);
+}
+
+#fsd-dashboard .fsd-total-cell {
+  font-weight: 600;
+  color: var(--fsd-gray-900);
+}
+
+#fsd-dashboard .fsd-total-t-warning {
+  color: var(--fsd-red) !important;
+}
+
+#fsd-dashboard .fsd-total-cell-warning .fsd-total-t-warning {
+  color: var(--fsd-red) !important;
+}
+
+/* ===== Project Header Colors ===== */
+#fsd-dashboard .fsd-table th[data-project] {
+  font-weight: 600;
+}
+
+/* ===== Detail Button (Pill Badge) ===== */
+#fsd-dashboard .fsd-detail-btn {
+  background: var(--fsd-gray-900);
+  color: var(--fsd-white);
+  border: none;
+  padding: 4px 12px;
+  border-radius: var(--fsd-radius-pill);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: var(--fsd-font);
+  transition: background 0.15s, transform 0.1s;
+}
+#fsd-dashboard .fsd-detail-btn:hover {
+  background: var(--fsd-gray-600);
+  transform: translateY(-1px);
+}
+
+/* ===== Detail Panel ===== */
+#fsd-dashboard .fsd-detail-panel {
+  display: none;
+  background: var(--fsd-white);
+  border-radius: var(--fsd-radius-lg);
+  margin-top: 20px;
+  padding: 24px;
+  box-shadow: var(--fsd-shadow-card);
+}
+
+#fsd-dashboard .fsd-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  box-shadow: inset 0 -1px 0 var(--fsd-gray-100);
+}
+
+#fsd-dashboard .fsd-detail-header h3 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--fsd-gray-900);
+  margin-right: auto;
+}
+
+#fsd-dashboard .fsd-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  margin-right: 10px;
+}
+
+#fsd-dashboard .fsd-badge {
+  background: var(--fsd-gray-900);
+  color: var(--fsd-white);
+  padding: 4px 14px;
+  border-radius: var(--fsd-radius-pill);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--fsd-font);
+}
+
+#fsd-dashboard .fsd-badge-warning {
+  background: var(--fsd-red);
+  color: var(--fsd-white);
+}
+
+#fsd-dashboard .fsd-badge-ot {
+  background: var(--fsd-red);
+  color: var(--fsd-white);
+}
+
+/* ===== Charts Area ===== */
+#fsd-dashboard .fsd-charts-area {
+  display: grid;
+  grid-template-columns: 1fr 1fr 260px;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+#fsd-dashboard .fsd-chart-section {
+  background: var(--fsd-white);
+  border-radius: var(--fsd-radius-md);
+  padding: 16px;
+  box-shadow: var(--fsd-shadow-border);
+}
+
+#fsd-dashboard .fsd-chart-section h4 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fsd-gray-500);
+  text-align: center;
+  font-family: var(--fsd-font);
+  letter-spacing: 0;
+}
+
+#fsd-dashboard .fsd-bar-chart,
+#fsd-dashboard .fsd-donut-chart {
+  width: 100%;
+  height: auto;
+}
+
+/* ===== Legend ===== */
+#fsd-dashboard .fsd-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+
+#fsd-dashboard .fsd-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--fsd-gray-500);
+  font-weight: 500;
+}
+
+#fsd-dashboard .fsd-legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* ===== Summary Sidebar ===== */
+#fsd-dashboard .fsd-summary-sidebar {
+  background: var(--fsd-white);
+  border-radius: var(--fsd-radius-md);
+  padding: 16px;
+  box-shadow: var(--fsd-shadow-border);
+}
+
+#fsd-dashboard .fsd-summary-sidebar h4 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fsd-gray-500);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--fsd-font);
+  letter-spacing: 0;
+}
+
+#fsd-dashboard .fsd-summary-item {
+  margin-bottom: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fsd-gray-600);
+}
+
+#fsd-dashboard .fsd-summary-proj {
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+/* ===== Task Details ===== */
+#fsd-dashboard .fsd-task-details {
+  margin-top: 8px;
+}
+
+#fsd-dashboard .fsd-task-details > h4 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 16px;
+  color: var(--fsd-gray-900);
+  letter-spacing: 0;
+}
+
+#fsd-dashboard .fsd-task-group {
+  margin-bottom: 16px;
+}
+
+#fsd-dashboard .fsd-task-group h5 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+#fsd-dashboard .fsd-project-badge {
+  display: inline-flex;
+  align-items: center;
+  color: var(--fsd-project-color);
+  background: color-mix(in srgb, var(--fsd-project-color) 12%, var(--fsd-white));
+  padding: 2px 10px;
+  border-radius: var(--fsd-radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+#fsd-dashboard .fsd-task-card-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+#fsd-dashboard .fsd-task-card-grid-split {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+#fsd-dashboard .fsd-task-card {
+  background: var(--fsd-gray-50);
+  border-radius: var(--fsd-radius-md);
+  padding: 14px;
+  margin-bottom: 8px;
+  box-shadow: var(--fsd-shadow-border);
+}
+
+#fsd-dashboard .fsd-task-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+#fsd-dashboard .fsd-task-type {
+  color: var(--fsd-gray-900);
+  font-weight: 600;
+  font-size: 14px;
+  font-family: var(--fsd-font);
+}
+
+#fsd-dashboard .fsd-ot-type {
+  color: var(--fsd-red);
+}
+
+#fsd-dashboard .fsd-task-card ul {
+  margin: 0;
+  padding-left: 0;
+  font-size: 13px;
+  color: var(--fsd-gray-600);
+  list-style: none;
+  line-height: 1.7;
+}
+
+#fsd-dashboard .fsd-task-card ul li::before {
+  content: '- ';
+  color: var(--fsd-gray-400);
+}
+
+#fsd-dashboard .fsd-no-task {
+  color: var(--fsd-gray-400);
+}
+
+/* ===== Copy Button ===== */
+#fsd-dashboard .fsd-copy-btn,
+#fsd-dashboard .fsd-copy-summary-btn {
+  background: var(--fsd-white);
+  color: var(--fsd-gray-600);
+  border: none;
+  padding: 3px 10px;
+  border-radius: var(--fsd-radius-sm);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: var(--fsd-font);
+  box-shadow: var(--fsd-shadow-border);
+  transition: background 0.15s, color 0.15s;
+}
+#fsd-dashboard .fsd-copy-btn:hover,
+#fsd-dashboard .fsd-copy-summary-btn:hover {
+  background: var(--fsd-gray-50);
+  color: var(--fsd-black);
+}
+
+/* ===== Empty State ===== */
+#fsd-dashboard .fsd-empty {
+  text-align: center;
+  color: var(--fsd-gray-400);
+  padding: 24px;
+  font-size: 13px;
+}
+
+/* ===== FAB (Floating Action Button) ===== */
+#fsd-fab {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 999998;
+  background: var(--fsd-black, #171717);
+  color: var(--fsd-white, #ffffff);
+  border: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  font-size: 18px;
+  cursor: pointer;
+  box-shadow: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.12) 0px 4px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  transition: transform 0.2s, box-shadow 0.2s;
+  font-family: var(--fsd-font);
+}
+#fsd-fab:hover {
+  transform: scale(1.08);
+  box-shadow: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.16) 0px 8px 24px;
+}
+
+/* ===== SVG Chart Styling ===== */
+#fsd-dashboard .fsd-bar-chart text {
+  font-family: var(--fsd-font);
+}
+#fsd-dashboard .fsd-donut-chart path {
+  transition: opacity 0.15s;
+  cursor: pointer;
+}
+#fsd-dashboard .fsd-donut-chart path:hover {
+  opacity: 0.8;
+}
+
+/* ===== Scrollbar ===== */
+#fsd-dashboard .fsd-modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+#fsd-dashboard .fsd-modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+#fsd-dashboard .fsd-modal-body::-webkit-scrollbar-thumb {
+  background: var(--fsd-gray-200);
+  border-radius: 3px;
+}
+#fsd-dashboard .fsd-modal-body::-webkit-scrollbar-thumb:hover {
+  background: var(--fsd-gray-400);
+}
+
+/* ===== Week Info Bar ===== */
+#fsd-dashboard .fsd-week-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  background: var(--fsd-gray-50);
+  border-radius: var(--fsd-radius-md);
+  box-shadow: var(--fsd-shadow-border);
+  font-size: 13px;
+  color: var(--fsd-gray-600);
+}
+#fsd-dashboard .fsd-week-info strong {
+  color: var(--fsd-gray-900);
+  font-weight: 600;
+}
+#fsd-dashboard .fsd-week-badge {
+  background: var(--fsd-gray-900);
+  color: var(--fsd-white);
+  padding: 2px 10px;
+  border-radius: var(--fsd-radius-pill);
+  font-size: 11px;
+  font-weight: 500;
+  font-family: var(--fsd-font);
+}
