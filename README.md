@@ -2,6 +2,10 @@
 
 Forbiz GW 개인별 주간 일정표를 읽어 FE 챕터 멤버별 T/OT/MM 요약과 상세 일정 목록을 보여주는 Chrome 확장프로그램입니다.
 
+## 데모
+
+![FB Schedule Dashboard 데모](./Demo.gif)
+
 ## 주요 기능
 
 - GW 개인별 주간 뷰의 일정표를 파싱해 멤버별 T/OT 합계를 계산합니다.
