@@ -1,7 +1,7 @@
 {
   "name": "fb-schedule-dashboard",
   "version": "0.1.0",
-  "description": "Forbiz GW FE 일정 대시보드 Chrome Extension",
+  "description": "Forbiz GW FE schedule dashboard Chrome Extension",
   "type": "module",
   "scripts": {
     "dev": "vite build --watch",
