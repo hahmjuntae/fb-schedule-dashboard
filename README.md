@@ -18,27 +18,13 @@ Forbiz GW 주간 일정표에서 `내일정만보기`로 필터링된 일정을 
 
 ## 설치 방법
 
-### 방법 1. Release ZIP으로 설치
+### 옵션 A. Git clone으로 설치
 
-가장 간단한 설치 방법입니다.
-
-1. GitHub Releases에서 최신 `fb-schedule-dashboard-v0.1.0.zip` 파일을 다운로드합니다.
-2. 원하는 위치에 ZIP 파일을 압축 해제합니다.
-3. Chrome에서 `chrome://extensions`를 엽니다.
-4. 우측 상단의 `개발자 모드`를 켭니다.
-5. `압축해제된 확장 프로그램을 로드합니다`를 누릅니다.
-6. 압축 해제한 폴더를 선택합니다.
-7. `https://gw.forbiz.co.kr/`의 일정 화면에서 `주` 탭을 선택하고 `내일정만보기`를 체크한 뒤 확장프로그램 아이콘을 클릭합니다.
-
-### 방법 2. 소스에서 빌드해서 설치
-
-개발하거나 직접 수정해서 사용할 때 적합합니다.
+권장 설치 방식입니다. 이 저장소는 Chrome에서 프로젝트 root 폴더를 바로 로드할 수 있게 `dist` 산출물을 포함합니다.
 
 ```bash
 git clone https://github.com/hahmjuntae/fb-schedule-dashboard.git
 cd fb-schedule-dashboard
-npm ci
-npm run build
 ```
 
 이후 Chrome에서 다음 순서로 설치합니다.
@@ -48,6 +34,26 @@ npm run build
 3. `압축해제된 확장 프로그램을 로드합니다`를 누릅니다.
 4. 프로젝트 root 폴더인 `fb-schedule-dashboard`를 선택합니다.
 5. `https://gw.forbiz.co.kr/`의 일정 화면에서 `주` 탭을 선택하고 `내일정만보기`를 체크한 뒤 확장프로그램 아이콘을 클릭합니다.
+
+업데이트는 같은 폴더에서 최신 코드를 받으면 됩니다.
+
+```bash
+git pull
+```
+
+Chrome이 즉시 최신 파일을 반영하지 않으면 `chrome://extensions`에서 이 확장프로그램을 새로고침합니다.
+
+### 옵션 B. Release ZIP으로 설치
+
+Git을 사용하지 않는 경우에 적합합니다.
+
+1. GitHub Releases에서 최신 `fb-schedule-dashboard-v0.1.1.zip` 파일을 다운로드합니다.
+2. 원하는 위치에 ZIP 파일을 압축 해제합니다.
+3. Chrome에서 `chrome://extensions`를 엽니다.
+4. 우측 상단의 `개발자 모드`를 켭니다.
+5. `압축해제된 확장 프로그램을 로드합니다`를 누릅니다.
+6. 압축 해제한 폴더를 선택합니다.
+7. `https://gw.forbiz.co.kr/`의 일정 화면에서 `주` 탭을 선택하고 `내일정만보기`를 체크한 뒤 확장프로그램 아이콘을 클릭합니다.
 
 ## 사용 방법
 
@@ -74,7 +80,7 @@ npx tsc --noEmit
 ```bash
 npm run build
 cd dist
-zip -r ../release/fb-schedule-dashboard-v0.1.0.zip .
+zip -r ../release/fb-schedule-dashboard-v0.1.1.zip .
 ```
 
 ## 권한
