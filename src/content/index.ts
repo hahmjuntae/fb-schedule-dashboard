@@ -17,7 +17,17 @@ declare global {
 const openDashboard = (): boolean => {
   const isPersonalWeekly = isWeeklyPersonalView();
   const items = parseCurrentScheduleView();
+  console.info('[FSD] Open dashboard requested.', {
+    isPersonalWeekly,
+    itemCount: items.length,
+    url: location.href,
+    sample: items.slice(0, 5),
+  });
   if (items.length === 0) {
+    console.warn('[FSD] No schedule data found for current view.', {
+      isPersonalWeekly,
+      bodyTextSample: document.body?.innerText?.slice(0, 500),
+    });
     alert('일정 데이터를 찾을 수 없습니다.\n개인별 주간 뷰 또는 주 탭에서 내일정만보기를 선택해주세요.');
     return false;
   }

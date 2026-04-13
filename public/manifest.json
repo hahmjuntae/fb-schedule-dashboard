@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "FB Schedule Dashboard",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Forbiz FE 일정 대시보드 - 주간 T/OT/MM 분석",
   "permissions": [
     "activeTab",

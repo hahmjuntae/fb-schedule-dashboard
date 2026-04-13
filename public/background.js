@@ -47,6 +47,7 @@ const showPageAlert = async (tabId, message) => {
 const injectContentScript = async (tabId, frameId) => {
   try {
     await executeInFrame(tabId, frameId, { files: [getContentScriptFile()] });
+    console.info(`[FSD] Content script injected into frame ${frameId}.`);
     return true;
   } catch (error) {
     console.warn(`[FSD] Failed to inject content script into frame ${frameId}.`, error);
@@ -59,9 +60,6 @@ const hasScheduleSource = async (tabId, frameId) => {
     const [result] = await executeInFrame(tabId, frameId, {
       func: (timeRangePatternSource) => {
         if (document.querySelector('#weekCalendar')) return true;
-
-        const hasMyScheduleOnlyText = (document.body?.innerText ?? '').replace(/\s/g, '').includes('내일정만보기');
-        if (!hasMyScheduleOnlyText) return false;
 
         const timeRangePattern = new RegExp(timeRangePatternSource);
         return Array.from(document.querySelectorAll('div, a')).some((element) => {
@@ -78,6 +76,7 @@ const hasScheduleSource = async (tabId, frameId) => {
       },
       args: [KOREAN_TIME_RANGE_PATTERN.source],
     });
+    console.info(`[FSD] Frame ${frameId} schedule source check.`, result?.result);
     return result?.result === true;
   } catch (error) {
     console.warn(`[FSD] Failed to inspect frame ${frameId}.`, error);
@@ -88,6 +87,7 @@ const hasScheduleSource = async (tabId, frameId) => {
 const openDashboardInFrame = async (tabId, frameId) => {
   try {
     const response = await chrome.tabs.sendMessage(tabId, { type: DASHBOARD_OPEN_MESSAGE }, { frameId });
+    console.info(`[FSD] Frame ${frameId} open response.`, response);
     return response?.opened === true;
   } catch (error) {
     console.warn(`[FSD] Failed to open dashboard via message in frame ${frameId}; falling back to DOM event.`, error);
@@ -109,12 +109,19 @@ const openDashboard = async (tab) => {
   const tabId = tab.id;
   if (typeof tabId !== 'number') return;
 
+  console.info('[FSD] Extension action clicked.', {
+    tabId,
+    tabUrl: tab.url,
+    tabTitle: tab.title,
+  });
+
   if (!isForbizGwUrl(tab.url)) {
     await showPageAlert(tabId, 'GW 일정 페이지(https://gw.forbiz.co.kr/)에서 실행해주세요.');
     return;
   }
 
   const frameIds = await getForbizFrameIds(tabId, tab.url);
+  console.info('[FSD] Candidate frames.', frameIds);
   if (frameIds.length === 0) {
     await showPageAlert(tabId, '실행 가능한 GW 프레임을 찾을 수 없습니다.');
     return;
@@ -128,6 +135,7 @@ const openDashboard = async (tab) => {
       scheduleFrameIds.push(frameId);
     }
   }
+  console.info('[FSD] Schedule frames.', scheduleFrameIds);
 
   if (scheduleFrameIds.length === 0) {
     await showPageAlert(tabId, '일정 데이터를 찾을 수 없습니다.\n개인별 주간 뷰 또는 주 탭에서 내일정만보기를 선택해주세요.');

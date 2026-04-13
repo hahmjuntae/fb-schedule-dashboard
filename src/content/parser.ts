@@ -1,7 +1,8 @@
 import type { NormalizedScheduleItem } from '@/types/schedule.types';
 
-const KOREAN_WEEKDAY_PATTERN = /([월화수목금토일])\s*(\d{1,2})\.(\d{1,2})/;
+const KOREAN_WEEKDAY_GLOBAL_PATTERN = /([월화수목금토일])\s*(\d{1,2})\.(\d{1,2})/g;
 const KOREAN_TIME_RANGE_PATTERN = /(오전|오후)\s*(\d{1,2}):(\d{2})\s*[-~]\s*(오전|오후)\s*(\d{1,2}):(\d{2})/;
+const KOREAN_TIME_RANGE_GLOBAL_PATTERN = /(오전|오후)\s*(\d{1,2}):(\d{2})\s*[-~]\s*(오전|오후)\s*(\d{1,2}):(\d{2})/g;
 const PROJECT_TITLE_PATTERN = /\[[^\]]+\]/;
 
 const normalizeText = (value: string): string => value.replace(/\s+/g, ' ').trim();
@@ -29,10 +30,7 @@ const parseKoreanTimeRange = (text: string): string | null => {
   return `${parseKoreanMeridiemTime(startMeridiem, startHour, startMinute)}~${parseKoreanMeridiemTime(endMeridiem, endHour, endMinute)}`;
 };
 
-const parseWeekDateLabel = (text: string): string | null => {
-  const match = normalizeText(text).match(KOREAN_WEEKDAY_PATTERN);
-  if (!match) return null;
-
+const parseWeekDateMatch = (match: RegExpMatchArray): string => {
   const [, weekday, month, day] = match;
   return `${toPadded(Number(month))}.${toPadded(Number(day))} (${weekday})`;
 };
@@ -53,10 +51,31 @@ const getWeekEventParts = (element: HTMLElement) => {
   if (!timeMatch) return null;
 
   const timeRange = parseKoreanTimeRange(timeMatch[0]);
-  const title = normalizeText(joinedText.slice((timeMatch.index ?? 0) + timeMatch[0].length));
+  const title = normalizeText(joinedText.slice((timeMatch.index ?? 0) + timeMatch[0].length))
+    .split(KOREAN_TIME_RANGE_PATTERN)[0]
+    ?.trim() ?? '';
   if (!timeRange || !PROJECT_TITLE_PATTERN.test(title)) return null;
 
   return { timeRange, title };
+};
+
+const getAllWeekEventParts = (element: HTMLElement) => {
+  const text = getElementLines(element).join(' ');
+  if (!text) return [];
+
+  const matches = Array.from(text.matchAll(KOREAN_TIME_RANGE_GLOBAL_PATTERN));
+  return matches
+    .map((match, index) => {
+      const nextMatch = matches[index + 1];
+      const titleStart = (match.index ?? 0) + match[0].length;
+      const titleEnd = nextMatch?.index ?? text.length;
+      const title = normalizeText(text.slice(titleStart, titleEnd));
+      const timeRange = parseKoreanTimeRange(match[0]);
+
+      if (!timeRange || !PROJECT_TITLE_PATTERN.test(title)) return null;
+      return { timeRange, title };
+    })
+    .filter((eventParts): eventParts is { timeRange: string; title: string } => Boolean(eventParts));
 };
 
 const getVisibleRect = (element: Element): DOMRect | null => {
@@ -70,23 +89,49 @@ const hasChildWeekEvent = (element: HTMLElement): boolean => {
 };
 
 const getWeekDayHeaders = () => {
-  const seen = new Set<string>();
-  const headerElements = Array.from(document.querySelectorAll<HTMLElement>('th, [role="columnheader"]'));
+  const headers: Array<{ date: string; rect: DOMRect }> = [];
+  const headerElements = Array.from(document.querySelectorAll<HTMLElement>('th, td, [role="columnheader"]'));
 
-  return headerElements
-    .map((element) => {
-      const date = parseWeekDateLabel(element.innerText || element.textContent || '');
+  headerElements.forEach((element) => {
+    const text = element.innerText || element.textContent || '';
+    const dateMatches = Array.from(text.matchAll(KOREAN_WEEKDAY_GLOBAL_PATTERN));
+    if (dateMatches.length === 0) return;
+
+    if (dateMatches.length === 1) {
       const rect = getVisibleRect(element);
-      if (!date || !rect) return null;
-      return { date, rect };
-    })
-    .filter((header): header is { date: string; rect: DOMRect } => Boolean(header))
-    .filter((header) => {
-      if (seen.has(header.date)) return false;
-      seen.add(header.date);
-      return true;
-    })
-    .sort((a, b) => a.rect.left - b.rect.left);
+      if (!rect) return;
+      headers.push({ date: parseWeekDateMatch(dateMatches[0]), rect });
+      return;
+    }
+
+    const rect = getVisibleRect(element);
+    if (!rect) return;
+
+    const columnWidth = rect.width / dateMatches.length;
+    dateMatches.forEach((match, index) => {
+      const left = rect.left + columnWidth * index;
+      headers.push({
+        date: parseWeekDateMatch(match),
+        rect: {
+          ...rect,
+          left,
+          right: left + columnWidth,
+          width: columnWidth,
+          x: left,
+        } as DOMRect,
+      });
+    });
+  });
+
+  const byDate = new Map<string, { date: string; rect: DOMRect }>();
+  headers.forEach((header) => {
+    const existing = byDate.get(header.date);
+    if (!existing || header.rect.width < existing.rect.width) {
+      byDate.set(header.date, header);
+    }
+  });
+
+  return [...byDate.values()].sort((a, b) => a.rect.left - b.rect.left);
 };
 
 const findDateForEvent = (eventRect: DOMRect, headers: Array<{ date: string; rect: DOMRect }>): string | null => {
@@ -126,18 +171,6 @@ const findCurrentMemberName = (): string => {
   }
 
   return '내 일정';
-};
-
-const hasMyScheduleOnlyFilter = (): boolean => {
-  const checkboxes = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
-  const myScheduleCheckbox = checkboxes.some((checkbox) => {
-    const containerText = normalizeText(checkbox.closest('label, div, li, dd, td')?.textContent ?? '');
-    return containerText.replace(/\s/g, '').includes('내일정만보기');
-  });
-
-  if (myScheduleCheckbox) return true;
-
-  return normalizeText(document.body?.innerText ?? '').replace(/\s/g, '').includes('내일정만보기');
 };
 
 /**
@@ -219,40 +252,70 @@ export const parseWeeklyScheduleTable = (): NormalizedScheduleItem[] => {
  * 화면에 보이는 모든 시간 일정 블록을 현재 사용자의 일정으로 취급한다.
  */
 export const parseMyWeeklyScheduleView = (): NormalizedScheduleItem[] => {
-  if (!hasMyScheduleOnlyFilter()) return [];
-
   const headers = getWeekDayHeaders();
-  if (headers.length < 5) return [];
+  if (headers.length < 5) {
+    console.info('[FSD] Weekly parser skipped: insufficient day headers.', { headerCount: headers.length });
+    return [];
+  }
 
   const memberName = findCurrentMemberName();
   const seen = new Set<string>();
+  const candidates = Array.from(document.querySelectorAll<HTMLElement>('div, a, li, span, td'));
+  let matchedElementCount = 0;
+  let withoutDateCount = 0;
 
-  return Array.from(document.querySelectorAll<HTMLElement>('div, a'))
-    .map((element) => {
-      const eventParts = getWeekEventParts(element);
+  const items = candidates
+    .flatMap((element) => {
+      const eventPartsList = getAllWeekEventParts(element);
       const rect = getVisibleRect(element);
-      if (!eventParts || !rect || hasChildWeekEvent(element)) return null;
+      if (eventPartsList.length === 0 || !rect || hasChildWeekEvent(element)) return [];
+      matchedElementCount += 1;
 
       const date = findDateForEvent(rect, headers);
-      if (!date) return null;
+      if (!date) {
+        withoutDateCount += eventPartsList.length;
+        return [];
+      }
 
-      const key = `${date}|${eventParts.timeRange}|${eventParts.title}`;
-      if (seen.has(key)) return null;
-      seen.add(key);
+      return eventPartsList
+        .map((eventParts) => {
+          const key = `${date}|${eventParts.timeRange}|${eventParts.title}`;
+          if (seen.has(key)) return null;
+          seen.add(key);
 
-      return {
-        date,
-        timeRange: eventParts.timeRange,
-        title: eventParts.title,
-        assignees: [memberName],
-      };
+          return {
+            date,
+            timeRange: eventParts.timeRange,
+            title: eventParts.title,
+            assignees: [memberName],
+          };
+        })
+        .filter((item): item is NormalizedScheduleItem => Boolean(item));
     })
     .filter((item): item is NormalizedScheduleItem => Boolean(item));
+
+  console.info('[FSD] Weekly parser result.', {
+    headerCount: headers.length,
+    candidateCount: candidates.length,
+    matchedElementCount,
+    withoutDateCount,
+    itemCount: items.length,
+    memberName,
+    sample: items.slice(0, 5),
+  });
+
+  return items;
 };
 
 export const parseCurrentScheduleView = (): NormalizedScheduleItem[] => {
   const personalWeeklyItems = parseWeeklyScheduleTable();
-  if (personalWeeklyItems.length > 0) return personalWeeklyItems;
+  if (personalWeeklyItems.length > 0) {
+    console.info('[FSD] Personal weekly parser result.', {
+      itemCount: personalWeeklyItems.length,
+      sample: personalWeeklyItems.slice(0, 5),
+    });
+    return personalWeeklyItems;
+  }
 
   return parseMyWeeklyScheduleView();
 };
