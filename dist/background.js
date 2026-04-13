@@ -2,6 +2,7 @@ const DASHBOARD_OPEN_EVENT = 'fsd:open-dashboard';
 const DASHBOARD_OPEN_MESSAGE = 'fsd:open-dashboard';
 const FORBIZ_GW_PREFIX = 'https://gw.forbiz.co.kr/';
 const KOREAN_TIME_RANGE_PATTERN = /(오전|오후)\s*\d{1,2}:\d{2}\s*[-~]\s*(오전|오후)\s*\d{1,2}:\d{2}/;
+const H24_TIME_RANGE_PATTERN = /\d{1,2}:\d{2}\s*[-~]\s*\d{1,2}:\d{2}/;
 
 const getContentScriptFile = () => {
   const manifest = chrome.runtime.getManifest();
@@ -58,10 +59,11 @@ const injectContentScript = async (tabId, frameId) => {
 const hasScheduleSource = async (tabId, frameId) => {
   try {
     const [result] = await executeInFrame(tabId, frameId, {
-      func: (timeRangePatternSource) => {
+      func: (koreanPatternSource, h24PatternSource) => {
         if (document.querySelector('#weekCalendar')) return true;
 
-        const timeRangePattern = new RegExp(timeRangePatternSource);
+        const koreanPattern = new RegExp(koreanPatternSource);
+        const h24Pattern = new RegExp(h24PatternSource);
         return Array.from(document.querySelectorAll('div, a')).some((element) => {
           const text = (element.innerText || element.textContent || '')
             .split('\n')
@@ -69,12 +71,12 @@ const hasScheduleSource = async (tabId, frameId) => {
             .filter(Boolean)
             .join(' ');
 
-          if (!timeRangePattern.test(text)) return false;
-          const title = text.replace(timeRangePattern, '').trim();
+          if (!koreanPattern.test(text) && !h24Pattern.test(text)) return false;
+          const title = text.replace(koreanPattern, '').replace(h24Pattern, '').trim();
           return /\[[^\]]+\]/.test(title);
         });
       },
-      args: [KOREAN_TIME_RANGE_PATTERN.source],
+      args: [KOREAN_TIME_RANGE_PATTERN.source, H24_TIME_RANGE_PATTERN.source],
     });
     console.info(`[FSD] Frame ${frameId} schedule source check.`, result?.result);
     return result?.result === true;

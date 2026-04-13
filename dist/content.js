@@ -3,6 +3,8 @@
   const KOREAN_WEEKDAY_GLOBAL_PATTERN = /([월화수목금토일])\s*(\d{1,2})\.(\d{1,2})/g;
   const KOREAN_TIME_RANGE_PATTERN = /(오전|오후)\s*(\d{1,2}):(\d{2})\s*[-~]\s*(오전|오후)\s*(\d{1,2}):(\d{2})/;
   const KOREAN_TIME_RANGE_GLOBAL_PATTERN = /(오전|오후)\s*(\d{1,2}):(\d{2})\s*[-~]\s*(오전|오후)\s*(\d{1,2}):(\d{2})/g;
+  const H24_TIME_RANGE_PATTERN = /(\d{1,2}):(\d{2})\s*[-~]\s*(\d{1,2}):(\d{2})/;
+  const H24_TIME_RANGE_GLOBAL_PATTERN = /(\d{1,2}):(\d{2})\s*[-~]\s*(\d{1,2}):(\d{2})/g;
   const PROJECT_TITLE_PATTERN = /\[[^\]]+\]/;
   const normalizeText = (value) => value.replace(/\s+/g, " ").trim();
   const toPadded = (value) => String(value).padStart(2, "0");
@@ -16,11 +18,19 @@
     }
     return `${toPadded(hour)}:${toPadded(minute)}`;
   };
-  const parseKoreanTimeRange = (text) => {
-    const match = normalizeText(text).match(KOREAN_TIME_RANGE_PATTERN);
-    if (!match) return null;
-    const [, startMeridiem, startHour, startMinute, endMeridiem, endHour, endMinute] = match;
-    return `${parseKoreanMeridiemTime(startMeridiem, startHour, startMinute)}~${parseKoreanMeridiemTime(endMeridiem, endHour, endMinute)}`;
+  const parseTimeRange$1 = (text) => {
+    const normalized = normalizeText(text);
+    const koreanMatch = normalized.match(KOREAN_TIME_RANGE_PATTERN);
+    if (koreanMatch) {
+      const [, startMeridiem, startHour, startMinute, endMeridiem, endHour, endMinute] = koreanMatch;
+      return `${parseKoreanMeridiemTime(startMeridiem, startHour, startMinute)}~${parseKoreanMeridiemTime(endMeridiem, endHour, endMinute)}`;
+    }
+    const h24Match = normalized.match(H24_TIME_RANGE_PATTERN);
+    if (h24Match) {
+      const [, startHour, startMinute, endHour, endMinute] = h24Match;
+      return `${toPadded(Number(startHour))}:${startMinute}~${toPadded(Number(endHour))}:${endMinute}`;
+    }
+    return null;
   };
   const parseWeekDateMatch = (match) => {
     const [, weekday, month, day] = match;
@@ -29,27 +39,36 @@
   const getElementLines = (element) => {
     return (element.innerText || element.textContent || "").split("\n").map(normalizeText).filter(Boolean);
   };
+  const matchTimeRange = (text) => {
+    return text.match(KOREAN_TIME_RANGE_PATTERN) ?? text.match(H24_TIME_RANGE_PATTERN);
+  };
+  const matchAllTimeRanges = (text) => {
+    const koreanMatches = Array.from(text.matchAll(KOREAN_TIME_RANGE_GLOBAL_PATTERN));
+    if (koreanMatches.length > 0) return koreanMatches;
+    return Array.from(text.matchAll(H24_TIME_RANGE_GLOBAL_PATTERN));
+  };
   const getWeekEventParts = (element) => {
     const lines = getElementLines(element);
     if (lines.length === 0) return null;
     const joinedText = lines.join(" ");
-    const timeMatch = joinedText.match(KOREAN_TIME_RANGE_PATTERN);
+    const timeMatch = matchTimeRange(joinedText);
     if (!timeMatch) return null;
-    const timeRange = parseKoreanTimeRange(timeMatch[0]);
-    const title = normalizeText(joinedText.slice((timeMatch.index ?? 0) + timeMatch[0].length)).split(KOREAN_TIME_RANGE_PATTERN)[0]?.trim() ?? "";
+    const timeRange = parseTimeRange$1(timeMatch[0]);
+    const afterTime = joinedText.slice((timeMatch.index ?? 0) + timeMatch[0].length);
+    const title = normalizeText(afterTime.split(H24_TIME_RANGE_PATTERN)[0]?.split(KOREAN_TIME_RANGE_PATTERN)[0] ?? "").trim();
     if (!timeRange || !PROJECT_TITLE_PATTERN.test(title)) return null;
     return { timeRange, title };
   };
   const getAllWeekEventParts = (element) => {
     const text = getElementLines(element).join(" ");
     if (!text) return [];
-    const matches = Array.from(text.matchAll(KOREAN_TIME_RANGE_GLOBAL_PATTERN));
+    const matches = matchAllTimeRanges(text);
     return matches.map((match, index) => {
       const nextMatch = matches[index + 1];
       const titleStart = (match.index ?? 0) + match[0].length;
       const titleEnd = nextMatch?.index ?? text.length;
       const title = normalizeText(text.slice(titleStart, titleEnd));
-      const timeRange = parseKoreanTimeRange(match[0]);
+      const timeRange = parseTimeRange$1(match[0]);
       if (!timeRange || !PROJECT_TITLE_PATTERN.test(title)) return null;
       return { timeRange, title };
     }).filter((eventParts) => Boolean(eventParts));
@@ -732,531 +751,531 @@ ${pData.otTasks.map((t) => `- ${t}`).join("\n")}`;
   const removeDashboard = () => {
     document.getElementById(DASHBOARD_ID)?.remove();
   };
-  const cssText = `
+  const cssText = `\r
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@1.3.9/dist/web/static/pretendard.css');
 /* ===== FSD: FB Schedule Dashboard — Flat Dashboard System ===== */
 /* Pretendard Font (fallback to system) */
-:root {
-  --fsd-font: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Segoe UI', sans-serif;
-
-  /* Vercel Colors */
-  --fsd-black: #171717;
-  --fsd-white: #ffffff;
-  --fsd-gray-50: #fafafa;
-  --fsd-gray-100: #ebebeb;
-  --fsd-gray-200: #e0e0e0;
-  --fsd-gray-400: #808080;
-  --fsd-gray-500: #666666;
-  --fsd-gray-600: #4d4d4d;
-  --fsd-gray-900: #171717;
-
-  /* Functional Accents */
-  --fsd-blue: #0a72ef;
-  --fsd-pink: #de1d8d;
-  --fsd-red: #ff5b4f;
-  --fsd-link: #0072f5;
-  --fsd-focus: hsla(212, 100%, 48%, 1);
-
-  /* Shadows */
-  --fsd-shadow-border: rgba(0, 0, 0, 0.08) 0px 0px 0px 1px;
-  --fsd-shadow-card: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, rgba(0,0,0,0.04) 0px 8px 8px -8px, #fafafa 0px 0px 0px 1px inset;
-  --fsd-shadow-elevated: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.06) 0px 4px 12px, rgba(0,0,0,0.04) 0px 16px 32px -8px;
-
-  /* Radius */
-  --fsd-radius-sm: 6px;
-  --fsd-radius-md: 8px;
-  --fsd-radius-lg: 8px;
-  --fsd-radius-pill: 9999px;
+:root {\r
+  --fsd-font: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Segoe UI', sans-serif;\r
+\r
+  /* Vercel Colors */\r
+  --fsd-black: #171717;\r
+  --fsd-white: #ffffff;\r
+  --fsd-gray-50: #fafafa;\r
+  --fsd-gray-100: #ebebeb;\r
+  --fsd-gray-200: #e0e0e0;\r
+  --fsd-gray-400: #808080;\r
+  --fsd-gray-500: #666666;\r
+  --fsd-gray-600: #4d4d4d;\r
+  --fsd-gray-900: #171717;\r
+\r
+  /* Functional Accents */\r
+  --fsd-blue: #0a72ef;\r
+  --fsd-pink: #de1d8d;\r
+  --fsd-red: #ff5b4f;\r
+  --fsd-link: #0072f5;\r
+  --fsd-focus: hsla(212, 100%, 48%, 1);\r
+\r
+  /* Shadows */\r
+  --fsd-shadow-border: rgba(0, 0, 0, 0.08) 0px 0px 0px 1px;\r
+  --fsd-shadow-card: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, rgba(0,0,0,0.04) 0px 8px 8px -8px, #fafafa 0px 0px 0px 1px inset;\r
+  --fsd-shadow-elevated: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.06) 0px 4px 12px, rgba(0,0,0,0.04) 0px 16px 32px -8px;\r
+\r
+  /* Radius */\r
+  --fsd-radius-sm: 6px;\r
+  --fsd-radius-md: 8px;\r
+  --fsd-radius-lg: 8px;\r
+  --fsd-radius-pill: 9999px;\r
 }
 /* ===== Overlay ===== */
-#fsd-dashboard .fsd-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: hsla(0, 0%, 98%, 0.8);
-  backdrop-filter: blur(4px);
-  z-index: 999999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--fsd-font);
-  font-feature-settings: "liga";
-  -webkit-font-smoothing: antialiased;
+#fsd-dashboard .fsd-overlay {\r
+  position: fixed;\r
+  top: 0;\r
+  left: 0;\r
+  width: 100vw;\r
+  height: 100vh;\r
+  background: hsla(0, 0%, 98%, 0.8);\r
+  backdrop-filter: blur(4px);\r
+  z-index: 999999;\r
+  display: flex;\r
+  align-items: center;\r
+  justify-content: center;\r
+  font-family: var(--fsd-font);\r
+  font-feature-settings: "liga";\r
+  -webkit-font-smoothing: antialiased;\r
 }
 /* ===== Modal ===== */
-#fsd-dashboard .fsd-modal {
-  background: var(--fsd-white);
-  color: var(--fsd-black);
-  border-radius: var(--fsd-radius-lg);
-  width: 95vw;
-  max-width: 1400px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: var(--fsd-shadow-elevated);
+#fsd-dashboard .fsd-modal {\r
+  background: var(--fsd-white);\r
+  color: var(--fsd-black);\r
+  border-radius: var(--fsd-radius-lg);\r
+  width: 95vw;\r
+  max-width: 1400px;\r
+  max-height: 90vh;\r
+  display: flex;\r
+  flex-direction: column;\r
+  box-shadow: var(--fsd-shadow-elevated);\r
 }
-#fsd-dashboard .fsd-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 24px;
-  box-shadow: var(--fsd-shadow-border);
+#fsd-dashboard .fsd-modal-header {\r
+  display: flex;\r
+  align-items: center;\r
+  justify-content: space-between;\r
+  padding: 16px 24px;\r
+  box-shadow: var(--fsd-shadow-border);\r
 }
-#fsd-dashboard .fsd-modal-header h2 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: 0;
-  color: var(--fsd-gray-900);
+#fsd-dashboard .fsd-modal-header h2 {\r
+  margin: 0;\r
+  font-size: 16px;\r
+  font-weight: 600;\r
+  letter-spacing: 0;\r
+  color: var(--fsd-gray-900);\r
 }
-#fsd-dashboard .fsd-modal-body {
-  padding: 24px;
-  overflow-y: auto;
-  flex: 1;
+#fsd-dashboard .fsd-modal-body {\r
+  padding: 24px;\r
+  overflow-y: auto;\r
+  flex: 1;\r
 }
 /* ===== Close Button ===== */
-#fsd-dashboard .fsd-close-btn,
-#fsd-dashboard .fsd-close-detail {
-  background: none;
-  border: none;
-  color: var(--fsd-gray-400);
-  font-size: 16px;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: var(--fsd-radius-sm);
-  transition: color 0.15s, background 0.15s;
+#fsd-dashboard .fsd-close-btn,\r
+#fsd-dashboard .fsd-close-detail {\r
+  background: none;\r
+  border: none;\r
+  color: var(--fsd-gray-400);\r
+  font-size: 16px;\r
+  cursor: pointer;\r
+  padding: 4px 8px;\r
+  border-radius: var(--fsd-radius-sm);\r
+  transition: color 0.15s, background 0.15s;\r
 }
-#fsd-dashboard .fsd-close-btn:hover,
-#fsd-dashboard .fsd-close-detail:hover {
-  color: var(--fsd-black);
-  background: var(--fsd-gray-50);
+#fsd-dashboard .fsd-close-btn:hover,\r
+#fsd-dashboard .fsd-close-detail:hover {\r
+  color: var(--fsd-black);\r
+  background: var(--fsd-gray-50);\r
 }
 /* ===== Section ===== */
-#fsd-dashboard .fsd-section-header {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  margin: 0 0 16px;
+#fsd-dashboard .fsd-section-header {\r
+  position: relative;\r
+  display: flex;\r
+  align-items: center;\r
+  justify-content: flex-start;\r
+  margin: 0 0 16px;\r
 }
-#fsd-dashboard .fsd-section-title {
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0;
-  margin: 0;
-  color: var(--fsd-gray-900);
-  font-family: var(--fsd-font);
+#fsd-dashboard .fsd-section-title {\r
+  font-size: 14px;\r
+  font-weight: 600;\r
+  letter-spacing: 0;\r
+  margin: 0;\r
+  color: var(--fsd-gray-900);\r
+  font-family: var(--fsd-font);\r
 }
-#fsd-dashboard .fsd-view-notice {
-  position: absolute;
-  top: 0;
-  right: 0;
-  display: block;
-  width: max-content;
-  color: var(--fsd-red);
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.4;
-  text-align: right;
-  white-space: nowrap !important;
+#fsd-dashboard .fsd-view-notice {\r
+  position: absolute;\r
+  top: 0;\r
+  right: 0;\r
+  display: block;\r
+  width: max-content;\r
+  color: var(--fsd-red);\r
+  font-size: 12px;\r
+  font-weight: 500;\r
+  line-height: 1.4;\r
+  text-align: right;\r
+  white-space: nowrap !important;\r
 }
 /* ===== Summary Table ===== */
-#fsd-dashboard .fsd-table-wrap {
-  overflow-x: auto;
-  margin-bottom: 24px;
-  border-radius: var(--fsd-radius-md);
-  box-shadow: var(--fsd-shadow-card);
+#fsd-dashboard .fsd-table-wrap {\r
+  overflow-x: auto;\r
+  margin-bottom: 24px;\r
+  border-radius: var(--fsd-radius-md);\r
+  box-shadow: var(--fsd-shadow-card);\r
 }
-#fsd-dashboard .fsd-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-  white-space: nowrap;
+#fsd-dashboard .fsd-table {\r
+  width: 100%;\r
+  border-collapse: collapse;\r
+  font-size: 13px;\r
+  white-space: nowrap;\r
 }
-#fsd-dashboard .fsd-table th {
-  background: var(--fsd-gray-50);
-  color: var(--fsd-gray-600);
-  padding: 10px 14px;
-  text-align: center;
-  font-weight: 500;
-  font-size: 12px;
-  letter-spacing: 0;
-  position: sticky;
-  top: 0;
-  border-bottom: 1px solid var(--fsd-gray-100);
+#fsd-dashboard .fsd-table th {\r
+  background: var(--fsd-gray-50);\r
+  color: var(--fsd-gray-600);\r
+  padding: 10px 14px;\r
+  text-align: center;\r
+  font-weight: 500;\r
+  font-size: 12px;\r
+  letter-spacing: 0;\r
+  position: sticky;\r
+  top: 0;\r
+  border-bottom: 1px solid var(--fsd-gray-100);\r
 }
-#fsd-dashboard .fsd-table td {
-  padding: 10px 14px;
-  text-align: center;
-  border-bottom: 1px solid var(--fsd-gray-100);
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
+#fsd-dashboard .fsd-table td {\r
+  padding: 10px 14px;\r
+  text-align: center;\r
+  border-bottom: 1px solid var(--fsd-gray-100);\r
+  font-variant-numeric: tabular-nums;\r
+  font-feature-settings: "tnum";\r
 }
-#fsd-dashboard .fsd-table tbody tr {
-  transition: background 0.1s;
+#fsd-dashboard .fsd-table tbody tr {\r
+  transition: background 0.1s;\r
 }
-#fsd-dashboard .fsd-table tbody tr:hover {
-  background: var(--fsd-gray-50);
+#fsd-dashboard .fsd-table tbody tr:hover {\r
+  background: var(--fsd-gray-50);\r
 }
-#fsd-dashboard .fsd-name-cell {
-  font-weight: 600;
-  color: var(--fsd-gray-900);
-  text-align: center;
-  letter-spacing: 0;
-  white-space: nowrap;
+#fsd-dashboard .fsd-name-cell {\r
+  font-weight: 600;\r
+  color: var(--fsd-gray-900);\r
+  text-align: center;\r
+  letter-spacing: 0;\r
+  white-space: nowrap;\r
 }
-#fsd-dashboard .fsd-name-main {
-  white-space: nowrap;
+#fsd-dashboard .fsd-name-main {\r
+  white-space: nowrap;\r
 }
-#fsd-dashboard .fsd-total-warning {
-  margin-top: 3px;
-  color: var(--fsd-red);
-  font-size: 10px;
-  font-weight: 500;
-  line-height: 1.25;
-  white-space: nowrap;
+#fsd-dashboard .fsd-total-warning {\r
+  margin-top: 3px;\r
+  color: var(--fsd-red);\r
+  font-size: 10px;\r
+  font-weight: 500;\r
+  line-height: 1.25;\r
+  white-space: nowrap;\r
 }
-#fsd-dashboard .fsd-cell-empty {
-  color: var(--fsd-gray-200);
+#fsd-dashboard .fsd-cell-empty {\r
+  color: var(--fsd-gray-200);\r
 }
-#fsd-dashboard .fsd-total-cell {
-  font-weight: 600;
-  color: var(--fsd-gray-900);
+#fsd-dashboard .fsd-total-cell {\r
+  font-weight: 600;\r
+  color: var(--fsd-gray-900);\r
 }
-#fsd-dashboard .fsd-total-t-warning {
-  color: var(--fsd-red) !important;
+#fsd-dashboard .fsd-total-t-warning {\r
+  color: var(--fsd-red) !important;\r
 }
-#fsd-dashboard .fsd-total-cell-warning .fsd-total-t-warning {
-  color: var(--fsd-red) !important;
+#fsd-dashboard .fsd-total-cell-warning .fsd-total-t-warning {\r
+  color: var(--fsd-red) !important;\r
 }
 /* ===== Project Header Colors ===== */
-#fsd-dashboard .fsd-table th[data-project] {
-  font-weight: 600;
+#fsd-dashboard .fsd-table th[data-project] {\r
+  font-weight: 600;\r
 }
 /* ===== Detail Button (Pill Badge) ===== */
-#fsd-dashboard .fsd-detail-btn {
-  background: var(--fsd-gray-900);
-  color: var(--fsd-white);
-  border: none;
-  padding: 4px 12px;
-  border-radius: var(--fsd-radius-pill);
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 500;
-  font-family: var(--fsd-font);
-  transition: background 0.15s, transform 0.1s;
+#fsd-dashboard .fsd-detail-btn {\r
+  background: var(--fsd-gray-900);\r
+  color: var(--fsd-white);\r
+  border: none;\r
+  padding: 4px 12px;\r
+  border-radius: var(--fsd-radius-pill);\r
+  cursor: pointer;\r
+  font-size: 11px;\r
+  font-weight: 500;\r
+  font-family: var(--fsd-font);\r
+  transition: background 0.15s, transform 0.1s;\r
 }
-#fsd-dashboard .fsd-detail-btn:hover {
-  background: var(--fsd-gray-600);
-  transform: translateY(-1px);
+#fsd-dashboard .fsd-detail-btn:hover {\r
+  background: var(--fsd-gray-600);\r
+  transform: translateY(-1px);\r
 }
 /* ===== Detail Panel ===== */
-#fsd-dashboard .fsd-detail-panel {
-  display: none;
-  background: var(--fsd-white);
-  border-radius: var(--fsd-radius-lg);
-  margin-top: 20px;
-  padding: 24px;
-  box-shadow: var(--fsd-shadow-card);
+#fsd-dashboard .fsd-detail-panel {\r
+  display: none;\r
+  background: var(--fsd-white);\r
+  border-radius: var(--fsd-radius-lg);\r
+  margin-top: 20px;\r
+  padding: 24px;\r
+  box-shadow: var(--fsd-shadow-card);\r
 }
-#fsd-dashboard .fsd-detail-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  box-shadow: inset 0 -1px 0 var(--fsd-gray-100);
+#fsd-dashboard .fsd-detail-header {\r
+  display: flex;\r
+  align-items: center;\r
+  gap: 12px;\r
+  margin-bottom: 20px;\r
+  padding-bottom: 16px;\r
+  box-shadow: inset 0 -1px 0 var(--fsd-gray-100);\r
 }
-#fsd-dashboard .fsd-detail-header h3 {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 600;
-  letter-spacing: 0;
-  color: var(--fsd-gray-900);
-  margin-right: auto;
+#fsd-dashboard .fsd-detail-header h3 {\r
+  margin: 0;\r
+  font-size: 24px;\r
+  font-weight: 600;\r
+  letter-spacing: 0;\r
+  color: var(--fsd-gray-900);\r
+  margin-right: auto;\r
 }
-#fsd-dashboard .fsd-badge-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
-  margin-right: 10px;
+#fsd-dashboard .fsd-badge-group {\r
+  display: flex;\r
+  align-items: center;\r
+  gap: 6px;\r
+  margin-left: auto;\r
+  margin-right: 10px;\r
 }
-#fsd-dashboard .fsd-badge {
-  background: var(--fsd-gray-900);
-  color: var(--fsd-white);
-  padding: 4px 14px;
-  border-radius: var(--fsd-radius-pill);
-  font-size: 12px;
-  font-weight: 500;
-  font-family: var(--fsd-font);
+#fsd-dashboard .fsd-badge {\r
+  background: var(--fsd-gray-900);\r
+  color: var(--fsd-white);\r
+  padding: 4px 14px;\r
+  border-radius: var(--fsd-radius-pill);\r
+  font-size: 12px;\r
+  font-weight: 500;\r
+  font-family: var(--fsd-font);\r
 }
-#fsd-dashboard .fsd-badge-warning {
-  background: var(--fsd-red);
-  color: var(--fsd-white);
+#fsd-dashboard .fsd-badge-warning {\r
+  background: var(--fsd-red);\r
+  color: var(--fsd-white);\r
 }
-#fsd-dashboard .fsd-badge-ot {
-  background: var(--fsd-red);
-  color: var(--fsd-white);
+#fsd-dashboard .fsd-badge-ot {\r
+  background: var(--fsd-red);\r
+  color: var(--fsd-white);\r
 }
 /* ===== Charts Area ===== */
-#fsd-dashboard .fsd-charts-area {
-  display: grid;
-  grid-template-columns: 1fr 1fr 260px;
-  gap: 16px;
-  margin-bottom: 24px;
+#fsd-dashboard .fsd-charts-area {\r
+  display: grid;\r
+  grid-template-columns: 1fr 1fr 260px;\r
+  gap: 16px;\r
+  margin-bottom: 24px;\r
 }
-#fsd-dashboard .fsd-chart-section {
-  background: var(--fsd-white);
-  border-radius: var(--fsd-radius-md);
-  padding: 16px;
-  box-shadow: var(--fsd-shadow-border);
+#fsd-dashboard .fsd-chart-section {\r
+  background: var(--fsd-white);\r
+  border-radius: var(--fsd-radius-md);\r
+  padding: 16px;\r
+  box-shadow: var(--fsd-shadow-border);\r
 }
-#fsd-dashboard .fsd-chart-section h4 {
-  margin: 0 0 12px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--fsd-gray-500);
-  text-align: center;
-  font-family: var(--fsd-font);
-  letter-spacing: 0;
+#fsd-dashboard .fsd-chart-section h4 {\r
+  margin: 0 0 12px;\r
+  font-size: 14px;\r
+  font-weight: 600;\r
+  color: var(--fsd-gray-500);\r
+  text-align: center;\r
+  font-family: var(--fsd-font);\r
+  letter-spacing: 0;\r
 }
-#fsd-dashboard .fsd-bar-chart,
-#fsd-dashboard .fsd-donut-chart {
-  width: 100%;
-  height: auto;
+#fsd-dashboard .fsd-bar-chart,\r
+#fsd-dashboard .fsd-donut-chart {\r
+  width: 100%;\r
+  height: auto;\r
 }
 /* ===== Legend ===== */
-#fsd-dashboard .fsd-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
-  font-size: 12px;
+#fsd-dashboard .fsd-legend {\r
+  display: flex;\r
+  flex-wrap: wrap;\r
+  gap: 8px;\r
+  margin-bottom: 12px;\r
+  font-size: 12px;\r
 }
-#fsd-dashboard .fsd-legend-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--fsd-gray-500);
-  font-weight: 500;
+#fsd-dashboard .fsd-legend-item {\r
+  display: flex;\r
+  align-items: center;\r
+  gap: 4px;\r
+  color: var(--fsd-gray-500);\r
+  font-weight: 500;\r
 }
-#fsd-dashboard .fsd-legend-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  display: inline-block;
+#fsd-dashboard .fsd-legend-dot {\r
+  width: 9px;\r
+  height: 9px;\r
+  border-radius: 50%;\r
+  display: inline-block;\r
 }
 /* ===== Summary Sidebar ===== */
-#fsd-dashboard .fsd-summary-sidebar {
-  background: var(--fsd-white);
-  border-radius: var(--fsd-radius-md);
-  padding: 16px;
-  box-shadow: var(--fsd-shadow-border);
+#fsd-dashboard .fsd-summary-sidebar {\r
+  background: var(--fsd-white);\r
+  border-radius: var(--fsd-radius-md);\r
+  padding: 16px;\r
+  box-shadow: var(--fsd-shadow-border);\r
 }
-#fsd-dashboard .fsd-summary-sidebar h4 {
-  margin: 0 0 12px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--fsd-gray-500);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-family: var(--fsd-font);
-  letter-spacing: 0;
+#fsd-dashboard .fsd-summary-sidebar h4 {\r
+  margin: 0 0 12px;\r
+  font-size: 12px;\r
+  font-weight: 500;\r
+  color: var(--fsd-gray-500);\r
+  display: flex;\r
+  align-items: center;\r
+  justify-content: space-between;\r
+  font-family: var(--fsd-font);\r
+  letter-spacing: 0;\r
 }
-#fsd-dashboard .fsd-summary-item {
-  margin-bottom: 10px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--fsd-gray-600);
+#fsd-dashboard .fsd-summary-item {\r
+  margin-bottom: 10px;\r
+  font-size: 13px;\r
+  line-height: 1.5;\r
+  color: var(--fsd-gray-600);\r
 }
-#fsd-dashboard .fsd-summary-proj {
-  font-weight: 600;
-  font-size: 13px;
-  letter-spacing: 0;
+#fsd-dashboard .fsd-summary-proj {\r
+  font-weight: 600;\r
+  font-size: 13px;\r
+  letter-spacing: 0;\r
 }
 /* ===== Task Details ===== */
-#fsd-dashboard .fsd-task-details {
-  margin-top: 8px;
+#fsd-dashboard .fsd-task-details {\r
+  margin-top: 8px;\r
 }
-#fsd-dashboard .fsd-task-details > h4 {
-  font-size: 14px;
-  font-weight: 600;
-  margin: 0 0 16px;
-  color: var(--fsd-gray-900);
-  letter-spacing: 0;
+#fsd-dashboard .fsd-task-details > h4 {\r
+  font-size: 14px;\r
+  font-weight: 600;\r
+  margin: 0 0 16px;\r
+  color: var(--fsd-gray-900);\r
+  letter-spacing: 0;\r
 }
-#fsd-dashboard .fsd-task-group {
-  margin-bottom: 16px;
+#fsd-dashboard .fsd-task-group {\r
+  margin-bottom: 16px;\r
 }
-#fsd-dashboard .fsd-task-group h5 {
-  margin: 0 0 8px;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0;
+#fsd-dashboard .fsd-task-group h5 {\r
+  margin: 0 0 8px;\r
+  font-size: 14px;\r
+  font-weight: 600;\r
+  letter-spacing: 0;\r
 }
-#fsd-dashboard .fsd-project-badge {
-  display: inline-flex;
-  align-items: center;
-  color: var(--fsd-project-color);
-  background: color-mix(in srgb, var(--fsd-project-color) 12%, var(--fsd-white));
-  padding: 2px 10px;
-  border-radius: var(--fsd-radius-pill);
-  font-size: 12px;
-  font-weight: 600;
+#fsd-dashboard .fsd-project-badge {\r
+  display: inline-flex;\r
+  align-items: center;\r
+  color: var(--fsd-project-color);\r
+  background: color-mix(in srgb, var(--fsd-project-color) 12%, var(--fsd-white));\r
+  padding: 2px 10px;\r
+  border-radius: var(--fsd-radius-pill);\r
+  font-size: 12px;\r
+  font-weight: 600;\r
 }
-#fsd-dashboard .fsd-task-card-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
+#fsd-dashboard .fsd-task-card-grid {\r
+  display: grid;\r
+  grid-template-columns: minmax(0, 1fr);\r
+  gap: 8px;\r
 }
-#fsd-dashboard .fsd-task-card-grid-split {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+#fsd-dashboard .fsd-task-card-grid-split {\r
+  grid-template-columns: repeat(2, minmax(0, 1fr));\r
 }
-#fsd-dashboard .fsd-task-card {
-  background: var(--fsd-gray-50);
-  border-radius: var(--fsd-radius-md);
-  padding: 14px;
-  margin-bottom: 8px;
-  box-shadow: var(--fsd-shadow-border);
+#fsd-dashboard .fsd-task-card {\r
+  background: var(--fsd-gray-50);\r
+  border-radius: var(--fsd-radius-md);\r
+  padding: 14px;\r
+  margin-bottom: 8px;\r
+  box-shadow: var(--fsd-shadow-border);\r
 }
-#fsd-dashboard .fsd-task-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
+#fsd-dashboard .fsd-task-header {\r
+  display: flex;\r
+  justify-content: space-between;\r
+  align-items: center;\r
+  margin-bottom: 8px;\r
 }
-#fsd-dashboard .fsd-task-type {
-  color: var(--fsd-gray-900);
-  font-weight: 600;
-  font-size: 14px;
-  font-family: var(--fsd-font);
+#fsd-dashboard .fsd-task-type {\r
+  color: var(--fsd-gray-900);\r
+  font-weight: 600;\r
+  font-size: 14px;\r
+  font-family: var(--fsd-font);\r
 }
-#fsd-dashboard .fsd-ot-type {
-  color: var(--fsd-red);
+#fsd-dashboard .fsd-ot-type {\r
+  color: var(--fsd-red);\r
 }
-#fsd-dashboard .fsd-task-card ul {
-  margin: 0;
-  padding-left: 0;
-  font-size: 13px;
-  color: var(--fsd-gray-600);
-  list-style: none;
-  line-height: 1.7;
+#fsd-dashboard .fsd-task-card ul {\r
+  margin: 0;\r
+  padding-left: 0;\r
+  font-size: 13px;\r
+  color: var(--fsd-gray-600);\r
+  list-style: none;\r
+  line-height: 1.7;\r
 }
-#fsd-dashboard .fsd-task-card ul li::before {
-  content: '- ';
-  color: var(--fsd-gray-400);
+#fsd-dashboard .fsd-task-card ul li::before {\r
+  content: '- ';\r
+  color: var(--fsd-gray-400);\r
 }
-#fsd-dashboard .fsd-no-task {
-  color: var(--fsd-gray-400);
+#fsd-dashboard .fsd-no-task {\r
+  color: var(--fsd-gray-400);\r
 }
 /* ===== Copy Button ===== */
-#fsd-dashboard .fsd-copy-btn,
-#fsd-dashboard .fsd-copy-summary-btn {
-  background: var(--fsd-white);
-  color: var(--fsd-gray-600);
-  border: none;
-  padding: 3px 10px;
-  border-radius: var(--fsd-radius-sm);
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 500;
-  font-family: var(--fsd-font);
-  box-shadow: var(--fsd-shadow-border);
-  transition: background 0.15s, color 0.15s;
+#fsd-dashboard .fsd-copy-btn,\r
+#fsd-dashboard .fsd-copy-summary-btn {\r
+  background: var(--fsd-white);\r
+  color: var(--fsd-gray-600);\r
+  border: none;\r
+  padding: 3px 10px;\r
+  border-radius: var(--fsd-radius-sm);\r
+  cursor: pointer;\r
+  font-size: 11px;\r
+  font-weight: 500;\r
+  font-family: var(--fsd-font);\r
+  box-shadow: var(--fsd-shadow-border);\r
+  transition: background 0.15s, color 0.15s;\r
 }
-#fsd-dashboard .fsd-copy-btn:hover,
-#fsd-dashboard .fsd-copy-summary-btn:hover {
-  background: var(--fsd-gray-50);
-  color: var(--fsd-black);
+#fsd-dashboard .fsd-copy-btn:hover,\r
+#fsd-dashboard .fsd-copy-summary-btn:hover {\r
+  background: var(--fsd-gray-50);\r
+  color: var(--fsd-black);\r
 }
 /* ===== Empty State ===== */
-#fsd-dashboard .fsd-empty {
-  text-align: center;
-  color: var(--fsd-gray-400);
-  padding: 24px;
-  font-size: 13px;
+#fsd-dashboard .fsd-empty {\r
+  text-align: center;\r
+  color: var(--fsd-gray-400);\r
+  padding: 24px;\r
+  font-size: 13px;\r
 }
 /* ===== FAB (Floating Action Button) ===== */
-#fsd-fab {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  z-index: 999998;
-  background: var(--fsd-black, #171717);
-  color: var(--fsd-white, #ffffff);
-  border: none;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  font-size: 18px;
-  cursor: pointer;
-  box-shadow: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.12) 0px 4px 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  transition: transform 0.2s, box-shadow 0.2s;
-  font-family: var(--fsd-font);
+#fsd-fab {\r
+  position: fixed;\r
+  bottom: 20px;\r
+  right: 20px;\r
+  z-index: 999998;\r
+  background: var(--fsd-black, #171717);\r
+  color: var(--fsd-white, #ffffff);\r
+  border: none;\r
+  width: 44px;\r
+  height: 44px;\r
+  border-radius: 50%;\r
+  font-size: 18px;\r
+  cursor: pointer;\r
+  box-shadow: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.12) 0px 4px 12px;\r
+  display: flex;\r
+  align-items: center;\r
+  justify-content: center;\r
+  font-weight: 600;\r
+  transition: transform 0.2s, box-shadow 0.2s;\r
+  font-family: var(--fsd-font);\r
 }
-#fsd-fab:hover {
-  transform: scale(1.08);
-  box-shadow: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.16) 0px 8px 24px;
+#fsd-fab:hover {\r
+  transform: scale(1.08);\r
+  box-shadow: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.16) 0px 8px 24px;\r
 }
 /* ===== SVG Chart Styling ===== */
-#fsd-dashboard .fsd-bar-chart text {
-  font-family: var(--fsd-font);
+#fsd-dashboard .fsd-bar-chart text {\r
+  font-family: var(--fsd-font);\r
 }
-#fsd-dashboard .fsd-donut-chart path {
-  transition: opacity 0.15s;
-  cursor: pointer;
+#fsd-dashboard .fsd-donut-chart path {\r
+  transition: opacity 0.15s;\r
+  cursor: pointer;\r
 }
-#fsd-dashboard .fsd-donut-chart path:hover {
-  opacity: 0.8;
+#fsd-dashboard .fsd-donut-chart path:hover {\r
+  opacity: 0.8;\r
 }
 /* ===== Scrollbar ===== */
-#fsd-dashboard .fsd-modal-body::-webkit-scrollbar {
-  width: 6px;
+#fsd-dashboard .fsd-modal-body::-webkit-scrollbar {\r
+  width: 6px;\r
 }
-#fsd-dashboard .fsd-modal-body::-webkit-scrollbar-track {
-  background: transparent;
+#fsd-dashboard .fsd-modal-body::-webkit-scrollbar-track {\r
+  background: transparent;\r
 }
-#fsd-dashboard .fsd-modal-body::-webkit-scrollbar-thumb {
-  background: var(--fsd-gray-200);
-  border-radius: 3px;
+#fsd-dashboard .fsd-modal-body::-webkit-scrollbar-thumb {\r
+  background: var(--fsd-gray-200);\r
+  border-radius: 3px;\r
 }
-#fsd-dashboard .fsd-modal-body::-webkit-scrollbar-thumb:hover {
-  background: var(--fsd-gray-400);
+#fsd-dashboard .fsd-modal-body::-webkit-scrollbar-thumb:hover {\r
+  background: var(--fsd-gray-400);\r
 }
 /* ===== Week Info Bar ===== */
-#fsd-dashboard .fsd-week-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
-  padding: 12px 16px;
-  background: var(--fsd-gray-50);
-  border-radius: var(--fsd-radius-md);
-  box-shadow: var(--fsd-shadow-border);
-  font-size: 13px;
-  color: var(--fsd-gray-600);
+#fsd-dashboard .fsd-week-info {\r
+  display: flex;\r
+  align-items: center;\r
+  gap: 12px;\r
+  margin-bottom: 20px;\r
+  padding: 12px 16px;\r
+  background: var(--fsd-gray-50);\r
+  border-radius: var(--fsd-radius-md);\r
+  box-shadow: var(--fsd-shadow-border);\r
+  font-size: 13px;\r
+  color: var(--fsd-gray-600);\r
 }
-#fsd-dashboard .fsd-week-info strong {
-  color: var(--fsd-gray-900);
-  font-weight: 600;
+#fsd-dashboard .fsd-week-info strong {\r
+  color: var(--fsd-gray-900);\r
+  font-weight: 600;\r
 }
-#fsd-dashboard .fsd-week-badge {
-  background: var(--fsd-gray-900);
-  color: var(--fsd-white);
-  padding: 2px 10px;
-  border-radius: var(--fsd-radius-pill);
-  font-size: 11px;
-  font-weight: 500;
-  font-family: var(--fsd-font);
-}
+#fsd-dashboard .fsd-week-badge {\r
+  background: var(--fsd-gray-900);\r
+  color: var(--fsd-white);\r
+  padding: 2px 10px;\r
+  border-radius: var(--fsd-radius-pill);\r
+  font-size: 11px;\r
+  font-weight: 500;\r
+  font-family: var(--fsd-font);\r
+}\r
 `;
   const FAB_ID = "fsd-fab";
   const STYLES_ID = "fsd-styles";

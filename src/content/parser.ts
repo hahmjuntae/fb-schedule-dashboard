@@ -3,6 +3,8 @@ import type { NormalizedScheduleItem } from '@/types/schedule.types';
 const KOREAN_WEEKDAY_GLOBAL_PATTERN = /([월화수목금토일])\s*(\d{1,2})\.(\d{1,2})/g;
 const KOREAN_TIME_RANGE_PATTERN = /(오전|오후)\s*(\d{1,2}):(\d{2})\s*[-~]\s*(오전|오후)\s*(\d{1,2}):(\d{2})/;
 const KOREAN_TIME_RANGE_GLOBAL_PATTERN = /(오전|오후)\s*(\d{1,2}):(\d{2})\s*[-~]\s*(오전|오후)\s*(\d{1,2}):(\d{2})/g;
+const H24_TIME_RANGE_PATTERN = /(\d{1,2}):(\d{2})\s*[-~]\s*(\d{1,2}):(\d{2})/;
+const H24_TIME_RANGE_GLOBAL_PATTERN = /(\d{1,2}):(\d{2})\s*[-~]\s*(\d{1,2}):(\d{2})/g;
 const PROJECT_TITLE_PATTERN = /\[[^\]]+\]/;
 
 const normalizeText = (value: string): string => value.replace(/\s+/g, ' ').trim();
@@ -22,12 +24,24 @@ const parseKoreanMeridiemTime = (meridiem: string, hourValue: string, minuteValu
   return `${toPadded(hour)}:${toPadded(minute)}`;
 };
 
-const parseKoreanTimeRange = (text: string): string | null => {
-  const match = normalizeText(text).match(KOREAN_TIME_RANGE_PATTERN);
-  if (!match) return null;
+const parseTimeRange = (text: string): string | null => {
+  const normalized = normalizeText(text);
 
-  const [, startMeridiem, startHour, startMinute, endMeridiem, endHour, endMinute] = match;
-  return `${parseKoreanMeridiemTime(startMeridiem, startHour, startMinute)}~${parseKoreanMeridiemTime(endMeridiem, endHour, endMinute)}`;
+  // 오전/오후 형식 우선 시도
+  const koreanMatch = normalized.match(KOREAN_TIME_RANGE_PATTERN);
+  if (koreanMatch) {
+    const [, startMeridiem, startHour, startMinute, endMeridiem, endHour, endMinute] = koreanMatch;
+    return `${parseKoreanMeridiemTime(startMeridiem, startHour, startMinute)}~${parseKoreanMeridiemTime(endMeridiem, endHour, endMinute)}`;
+  }
+
+  // 24시간제 형식 (08:30 - 12:30)
+  const h24Match = normalized.match(H24_TIME_RANGE_PATTERN);
+  if (h24Match) {
+    const [, startHour, startMinute, endHour, endMinute] = h24Match;
+    return `${toPadded(Number(startHour))}:${startMinute}~${toPadded(Number(endHour))}:${endMinute}`;
+  }
+
+  return null;
 };
 
 const parseWeekDateMatch = (match: RegExpMatchArray): string => {
@@ -42,18 +56,27 @@ const getElementLines = (element: HTMLElement): string[] => {
     .filter(Boolean);
 };
 
+const matchTimeRange = (text: string): RegExpMatchArray | null => {
+  return text.match(KOREAN_TIME_RANGE_PATTERN) ?? text.match(H24_TIME_RANGE_PATTERN);
+};
+
+const matchAllTimeRanges = (text: string): RegExpMatchArray[] => {
+  const koreanMatches = Array.from(text.matchAll(KOREAN_TIME_RANGE_GLOBAL_PATTERN));
+  if (koreanMatches.length > 0) return koreanMatches;
+  return Array.from(text.matchAll(H24_TIME_RANGE_GLOBAL_PATTERN));
+};
+
 const getWeekEventParts = (element: HTMLElement) => {
   const lines = getElementLines(element);
   if (lines.length === 0) return null;
 
   const joinedText = lines.join(' ');
-  const timeMatch = joinedText.match(KOREAN_TIME_RANGE_PATTERN);
+  const timeMatch = matchTimeRange(joinedText);
   if (!timeMatch) return null;
 
-  const timeRange = parseKoreanTimeRange(timeMatch[0]);
-  const title = normalizeText(joinedText.slice((timeMatch.index ?? 0) + timeMatch[0].length))
-    .split(KOREAN_TIME_RANGE_PATTERN)[0]
-    ?.trim() ?? '';
+  const timeRange = parseTimeRange(timeMatch[0]);
+  const afterTime = joinedText.slice((timeMatch.index ?? 0) + timeMatch[0].length);
+  const title = normalizeText(afterTime.split(H24_TIME_RANGE_PATTERN)[0]?.split(KOREAN_TIME_RANGE_PATTERN)[0] ?? '').trim();
   if (!timeRange || !PROJECT_TITLE_PATTERN.test(title)) return null;
 
   return { timeRange, title };
@@ -63,14 +86,14 @@ const getAllWeekEventParts = (element: HTMLElement) => {
   const text = getElementLines(element).join(' ');
   if (!text) return [];
 
-  const matches = Array.from(text.matchAll(KOREAN_TIME_RANGE_GLOBAL_PATTERN));
+  const matches = matchAllTimeRanges(text);
   return matches
     .map((match, index) => {
       const nextMatch = matches[index + 1];
       const titleStart = (match.index ?? 0) + match[0].length;
       const titleEnd = nextMatch?.index ?? text.length;
       const title = normalizeText(text.slice(titleStart, titleEnd));
-      const timeRange = parseKoreanTimeRange(match[0]);
+      const timeRange = parseTimeRange(match[0]);
 
       if (!timeRange || !PROJECT_TITLE_PATTERN.test(title)) return null;
       return { timeRange, title };
