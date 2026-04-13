@@ -1,6 +1,7 @@
 const DASHBOARD_OPEN_EVENT = 'fsd:open-dashboard';
-const SCHEDULE_TABLE_SELECTOR = '#weekCalendar';
+const DASHBOARD_OPEN_MESSAGE = 'fsd:open-dashboard';
 const FORBIZ_GW_PREFIX = 'https://gw.forbiz.co.kr/';
+const KOREAN_TIME_RANGE_PATTERN = /(오전|오후)\s*\d{1,2}:\d{2}\s*[-~]\s*(오전|오후)\s*\d{1,2}:\d{2}/;
 
 const getContentScriptFile = () => {
   const manifest = chrome.runtime.getManifest();
@@ -53,11 +54,29 @@ const injectContentScript = async (tabId, frameId) => {
   }
 };
 
-const hasScheduleTable = async (tabId, frameId) => {
+const hasScheduleSource = async (tabId, frameId) => {
   try {
     const [result] = await executeInFrame(tabId, frameId, {
-      func: (selector) => Boolean(document.querySelector(selector)),
-      args: [SCHEDULE_TABLE_SELECTOR],
+      func: (timeRangePatternSource) => {
+        if (document.querySelector('#weekCalendar')) return true;
+
+        const hasMyScheduleOnlyText = (document.body?.innerText ?? '').replace(/\s/g, '').includes('내일정만보기');
+        if (!hasMyScheduleOnlyText) return false;
+
+        const timeRangePattern = new RegExp(timeRangePatternSource);
+        return Array.from(document.querySelectorAll('div, a')).some((element) => {
+          const text = (element.innerText || element.textContent || '')
+            .split('\n')
+            .map((line) => line.replace(/\s+/g, ' ').trim())
+            .filter(Boolean)
+            .join(' ');
+
+          if (!timeRangePattern.test(text)) return false;
+          const title = text.replace(timeRangePattern, '').trim();
+          return /\[[^\]]+\]/.test(title);
+        });
+      },
+      args: [KOREAN_TIME_RANGE_PATTERN.source],
     });
     return result?.result === true;
   } catch (error) {
@@ -67,6 +86,13 @@ const hasScheduleTable = async (tabId, frameId) => {
 };
 
 const openDashboardInFrame = async (tabId, frameId) => {
+  try {
+    const response = await chrome.tabs.sendMessage(tabId, { type: DASHBOARD_OPEN_MESSAGE }, { frameId });
+    return response?.opened === true;
+  } catch (error) {
+    console.warn(`[FSD] Failed to open dashboard via message in frame ${frameId}; falling back to DOM event.`, error);
+  }
+
   try {
     await executeInFrame(tabId, frameId, {
       func: (eventName) => window.dispatchEvent(new CustomEvent(eventName)),
@@ -98,17 +124,20 @@ const openDashboard = async (tab) => {
 
   const scheduleFrameIds = [];
   for (const frameId of frameIds) {
-    if (await hasScheduleTable(tabId, frameId)) {
+    if (await hasScheduleSource(tabId, frameId)) {
       scheduleFrameIds.push(frameId);
     }
   }
 
   if (scheduleFrameIds.length === 0) {
-    await showPageAlert(tabId, '일정 데이터를 찾을 수 없습니다.\n개인별 주간 뷰로 전환해주세요.');
+    await showPageAlert(tabId, '일정 데이터를 찾을 수 없습니다.\n개인별 주간 뷰 또는 주 탭에서 내일정만보기를 선택해주세요.');
     return;
   }
 
-  await Promise.all(scheduleFrameIds.map((frameId) => openDashboardInFrame(tabId, frameId)));
+  const openedResults = await Promise.all(scheduleFrameIds.map((frameId) => openDashboardInFrame(tabId, frameId)));
+  if (!openedResults.some(Boolean)) {
+    await showPageAlert(tabId, '대시보드를 열 수 없습니다.\n확장 프로그램을 새로고침한 뒤 다시 실행해주세요.');
+  }
 };
 
 chrome.action.onClicked.addListener((tab) => {

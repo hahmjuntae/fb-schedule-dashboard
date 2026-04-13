@@ -21,7 +21,11 @@ const collectAllProjects = (memberRecord: MemberRecord): string[] => {
 };
 
 /** 요약 테이블 렌더링 */
-const renderSummaryTable = (memberRecord: MemberRecord, allProjects: string[]): string => {
+const renderSummaryTable = (
+  memberRecord: MemberRecord,
+  allProjects: string[],
+  notice?: string,
+): string => {
   const headerCells = allProjects
     .map((p) => `<th style="color:${getProjectColor(p)}">${p}</th>`)
     .join('');
@@ -57,7 +61,10 @@ const renderSummaryTable = (memberRecord: MemberRecord, allProjects: string[]): 
 
   return `
     <div class="fsd-section">
-      <h3 class="fsd-section-title">요약</h3>
+      <div class="fsd-section-header">
+        <h3 class="fsd-section-title">요약</h3>
+        ${notice ? `<div class="fsd-view-notice">${notice}</div>` : ''}
+      </div>
       <div class="fsd-table-wrap">
         <table class="fsd-table">
           <thead>
@@ -189,15 +196,19 @@ const renderMemberDetail = (
   `;
 };
 
+interface RenderDashboardOptions {
+  notice?: string;
+}
+
 /** 전체 대시보드 렌더링 */
-export const renderDashboard = (analytics: ScheduleAnalytics): void => {
+export const renderDashboard = (analytics: ScheduleAnalytics, options: RenderDashboardOptions = {}): void => {
   // 기존 대시보드 제거
   document.getElementById(DASHBOARD_ID)?.remove();
 
   const { memberRecord, memberInsights } = analytics;
   const allProjects = collectAllProjects(memberRecord);
 
-  const summaryTable = renderSummaryTable(memberRecord, allProjects);
+  const summaryTable = renderSummaryTable(memberRecord, allProjects, options.notice);
 
   // 상세 패널 (초기에는 숨김)
   const detailPanels = Object.entries(memberRecord)

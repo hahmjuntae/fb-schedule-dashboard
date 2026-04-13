@@ -108,13 +108,35 @@
 }
 
 /* ===== Section ===== */
+#fsd-dashboard .fsd-section-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin: 0 0 16px;
+}
+
 #fsd-dashboard .fsd-section-title {
   font-size: 14px;
   font-weight: 600;
   letter-spacing: 0;
-  margin: 0 0 16px;
+  margin: 0;
   color: var(--fsd-gray-900);
   font-family: var(--fsd-font);
+}
+
+#fsd-dashboard .fsd-view-notice {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: block;
+  width: max-content;
+  color: var(--fsd-red);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: right;
+  white-space: nowrap !important;
 }
 
 /* ===== Summary Table ===== */

@@ -1,5 +1,145 @@
 import type { NormalizedScheduleItem } from '@/types/schedule.types';
 
+const KOREAN_WEEKDAY_PATTERN = /([월화수목금토일])\s*(\d{1,2})\.(\d{1,2})/;
+const KOREAN_TIME_RANGE_PATTERN = /(오전|오후)\s*(\d{1,2}):(\d{2})\s*[-~]\s*(오전|오후)\s*(\d{1,2}):(\d{2})/;
+const PROJECT_TITLE_PATTERN = /\[[^\]]+\]/;
+
+const normalizeText = (value: string): string => value.replace(/\s+/g, ' ').trim();
+
+const toPadded = (value: number): string => String(value).padStart(2, '0');
+
+const parseKoreanMeridiemTime = (meridiem: string, hourValue: string, minuteValue: string): string => {
+  let hour = Number(hourValue);
+  const minute = Number(minuteValue);
+
+  if (meridiem === '오전') {
+    if (hour === 12) hour = 0;
+  } else if (hour !== 12) {
+    hour += 12;
+  }
+
+  return `${toPadded(hour)}:${toPadded(minute)}`;
+};
+
+const parseKoreanTimeRange = (text: string): string | null => {
+  const match = normalizeText(text).match(KOREAN_TIME_RANGE_PATTERN);
+  if (!match) return null;
+
+  const [, startMeridiem, startHour, startMinute, endMeridiem, endHour, endMinute] = match;
+  return `${parseKoreanMeridiemTime(startMeridiem, startHour, startMinute)}~${parseKoreanMeridiemTime(endMeridiem, endHour, endMinute)}`;
+};
+
+const parseWeekDateLabel = (text: string): string | null => {
+  const match = normalizeText(text).match(KOREAN_WEEKDAY_PATTERN);
+  if (!match) return null;
+
+  const [, weekday, month, day] = match;
+  return `${toPadded(Number(month))}.${toPadded(Number(day))} (${weekday})`;
+};
+
+const getElementLines = (element: HTMLElement): string[] => {
+  return (element.innerText || element.textContent || '')
+    .split('\n')
+    .map(normalizeText)
+    .filter(Boolean);
+};
+
+const getWeekEventParts = (element: HTMLElement) => {
+  const lines = getElementLines(element);
+  if (lines.length === 0) return null;
+
+  const joinedText = lines.join(' ');
+  const timeMatch = joinedText.match(KOREAN_TIME_RANGE_PATTERN);
+  if (!timeMatch) return null;
+
+  const timeRange = parseKoreanTimeRange(timeMatch[0]);
+  const title = normalizeText(joinedText.slice((timeMatch.index ?? 0) + timeMatch[0].length));
+  if (!timeRange || !PROJECT_TITLE_PATTERN.test(title)) return null;
+
+  return { timeRange, title };
+};
+
+const getVisibleRect = (element: Element): DOMRect | null => {
+  const rect = element.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return null;
+  return rect;
+};
+
+const hasChildWeekEvent = (element: HTMLElement): boolean => {
+  return Array.from(element.children).some((child) => getWeekEventParts(child as HTMLElement));
+};
+
+const getWeekDayHeaders = () => {
+  const seen = new Set<string>();
+  const headerElements = Array.from(document.querySelectorAll<HTMLElement>('th, [role="columnheader"]'));
+
+  return headerElements
+    .map((element) => {
+      const date = parseWeekDateLabel(element.innerText || element.textContent || '');
+      const rect = getVisibleRect(element);
+      if (!date || !rect) return null;
+      return { date, rect };
+    })
+    .filter((header): header is { date: string; rect: DOMRect } => Boolean(header))
+    .filter((header) => {
+      if (seen.has(header.date)) return false;
+      seen.add(header.date);
+      return true;
+    })
+    .sort((a, b) => a.rect.left - b.rect.left);
+};
+
+const findDateForEvent = (eventRect: DOMRect, headers: Array<{ date: string; rect: DOMRect }>): string | null => {
+  const centerX = eventRect.left + eventRect.width / 2;
+  const containingHeader = headers.find(({ rect }) => centerX >= rect.left && centerX <= rect.right);
+  if (containingHeader) return containingHeader.date;
+
+  const nearestHeader = headers.reduce<{ date: string; distance: number } | null>((nearest, header) => {
+    const headerCenterX = header.rect.left + header.rect.width / 2;
+    const distance = Math.abs(centerX - headerCenterX);
+    if (!nearest || distance < nearest.distance) {
+      return { date: header.date, distance };
+    }
+    return nearest;
+  }, null);
+
+  return nearestHeader?.date ?? null;
+};
+
+const findCurrentMemberName = (): string => {
+  const documents: Document[] = [document];
+  try {
+    if (window.top?.document && window.top.document !== document) {
+      documents.push(window.top.document);
+    }
+  } catch {
+    // Cross-frame access is best-effort only.
+  }
+
+  for (const doc of documents) {
+    const text = doc.body?.innerText ?? '';
+    const topUserMatch = text.match(/-FE-([가-힣]{2,5})\([^)]+\)/);
+    if (topUserMatch?.[1]) return topUserMatch[1];
+
+    const calendarMatch = text.match(/개인캘린더\.([가-힣]{2,5})/);
+    if (calendarMatch?.[1]) return calendarMatch[1];
+  }
+
+  return '내 일정';
+};
+
+const hasMyScheduleOnlyFilter = (): boolean => {
+  const checkboxes = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
+  const myScheduleCheckbox = checkboxes.some((checkbox) => {
+    const containerText = normalizeText(checkbox.closest('label, div, li, dd, td')?.textContent ?? '');
+    return containerText.replace(/\s/g, '').includes('내일정만보기');
+  });
+
+  if (myScheduleCheckbox) return true;
+
+  return normalizeText(document.body?.innerText ?? '').replace(/\s/g, '').includes('내일정만보기');
+};
+
 /**
  * GW 개인별 주간 뷰의 #weekCalendar 테이블을 파싱하여 NormalizedScheduleItem[] 반환
  *
@@ -73,10 +213,59 @@ export const parseWeeklyScheduleTable = (): NormalizedScheduleItem[] => {
 };
 
 /**
+ * GW "주" 뷰에서 "내 일정만 보기"로 필터링된 화면의 일정 블록을 파싱한다.
+ *
+ * 이 뷰에서는 다른 사람이 등록했지만 내가 대상자인 일정도 함께 내려오므로,
+ * 화면에 보이는 모든 시간 일정 블록을 현재 사용자의 일정으로 취급한다.
+ */
+export const parseMyWeeklyScheduleView = (): NormalizedScheduleItem[] => {
+  if (!hasMyScheduleOnlyFilter()) return [];
+
+  const headers = getWeekDayHeaders();
+  if (headers.length < 5) return [];
+
+  const memberName = findCurrentMemberName();
+  const seen = new Set<string>();
+
+  return Array.from(document.querySelectorAll<HTMLElement>('div, a'))
+    .map((element) => {
+      const eventParts = getWeekEventParts(element);
+      const rect = getVisibleRect(element);
+      if (!eventParts || !rect || hasChildWeekEvent(element)) return null;
+
+      const date = findDateForEvent(rect, headers);
+      if (!date) return null;
+
+      const key = `${date}|${eventParts.timeRange}|${eventParts.title}`;
+      if (seen.has(key)) return null;
+      seen.add(key);
+
+      return {
+        date,
+        timeRange: eventParts.timeRange,
+        title: eventParts.title,
+        assignees: [memberName],
+      };
+    })
+    .filter((item): item is NormalizedScheduleItem => Boolean(item));
+};
+
+export const parseCurrentScheduleView = (): NormalizedScheduleItem[] => {
+  const personalWeeklyItems = parseWeeklyScheduleTable();
+  if (personalWeeklyItems.length > 0) return personalWeeklyItems;
+
+  return parseMyWeeklyScheduleView();
+};
+
+/**
  * 파싱 가능한 개인별 주간 뷰인지 판별
  */
 export const isWeeklyPersonalView = (): boolean => {
   return !!document.querySelector('#weekCalendar');
+};
+
+export const isSupportedScheduleView = (): boolean => {
+  return isWeeklyPersonalView() || parseMyWeeklyScheduleView().length > 0;
 };
 
 /**

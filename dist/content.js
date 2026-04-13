@@ -1,5 +1,108 @@
 (function() {
   "use strict";
+  const KOREAN_WEEKDAY_PATTERN = /([월화수목금토일])\s*(\d{1,2})\.(\d{1,2})/;
+  const KOREAN_TIME_RANGE_PATTERN = /(오전|오후)\s*(\d{1,2}):(\d{2})\s*[-~]\s*(오전|오후)\s*(\d{1,2}):(\d{2})/;
+  const PROJECT_TITLE_PATTERN = /\[[^\]]+\]/;
+  const normalizeText = (value) => value.replace(/\s+/g, " ").trim();
+  const toPadded = (value) => String(value).padStart(2, "0");
+  const parseKoreanMeridiemTime = (meridiem, hourValue, minuteValue) => {
+    let hour = Number(hourValue);
+    const minute = Number(minuteValue);
+    if (meridiem === "오전") {
+      if (hour === 12) hour = 0;
+    } else if (hour !== 12) {
+      hour += 12;
+    }
+    return `${toPadded(hour)}:${toPadded(minute)}`;
+  };
+  const parseKoreanTimeRange = (text) => {
+    const match = normalizeText(text).match(KOREAN_TIME_RANGE_PATTERN);
+    if (!match) return null;
+    const [, startMeridiem, startHour, startMinute, endMeridiem, endHour, endMinute] = match;
+    return `${parseKoreanMeridiemTime(startMeridiem, startHour, startMinute)}~${parseKoreanMeridiemTime(endMeridiem, endHour, endMinute)}`;
+  };
+  const parseWeekDateLabel = (text) => {
+    const match = normalizeText(text).match(KOREAN_WEEKDAY_PATTERN);
+    if (!match) return null;
+    const [, weekday, month, day] = match;
+    return `${toPadded(Number(month))}.${toPadded(Number(day))} (${weekday})`;
+  };
+  const getElementLines = (element) => {
+    return (element.innerText || element.textContent || "").split("\n").map(normalizeText).filter(Boolean);
+  };
+  const getWeekEventParts = (element) => {
+    const lines = getElementLines(element);
+    if (lines.length === 0) return null;
+    const joinedText = lines.join(" ");
+    const timeMatch = joinedText.match(KOREAN_TIME_RANGE_PATTERN);
+    if (!timeMatch) return null;
+    const timeRange = parseKoreanTimeRange(timeMatch[0]);
+    const title = normalizeText(joinedText.slice((timeMatch.index ?? 0) + timeMatch[0].length));
+    if (!timeRange || !PROJECT_TITLE_PATTERN.test(title)) return null;
+    return { timeRange, title };
+  };
+  const getVisibleRect = (element) => {
+    const rect = element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    return rect;
+  };
+  const hasChildWeekEvent = (element) => {
+    return Array.from(element.children).some((child) => getWeekEventParts(child));
+  };
+  const getWeekDayHeaders = () => {
+    const seen = /* @__PURE__ */ new Set();
+    const headerElements = Array.from(document.querySelectorAll('th, [role="columnheader"]'));
+    return headerElements.map((element) => {
+      const date = parseWeekDateLabel(element.innerText || element.textContent || "");
+      const rect = getVisibleRect(element);
+      if (!date || !rect) return null;
+      return { date, rect };
+    }).filter((header) => Boolean(header)).filter((header) => {
+      if (seen.has(header.date)) return false;
+      seen.add(header.date);
+      return true;
+    }).sort((a, b) => a.rect.left - b.rect.left);
+  };
+  const findDateForEvent = (eventRect, headers) => {
+    const centerX = eventRect.left + eventRect.width / 2;
+    const containingHeader = headers.find(({ rect }) => centerX >= rect.left && centerX <= rect.right);
+    if (containingHeader) return containingHeader.date;
+    const nearestHeader = headers.reduce((nearest, header) => {
+      const headerCenterX = header.rect.left + header.rect.width / 2;
+      const distance = Math.abs(centerX - headerCenterX);
+      if (!nearest || distance < nearest.distance) {
+        return { date: header.date, distance };
+      }
+      return nearest;
+    }, null);
+    return nearestHeader?.date ?? null;
+  };
+  const findCurrentMemberName = () => {
+    const documents = [document];
+    try {
+      if (window.top?.document && window.top.document !== document) {
+        documents.push(window.top.document);
+      }
+    } catch {
+    }
+    for (const doc of documents) {
+      const text = doc.body?.innerText ?? "";
+      const topUserMatch = text.match(/-FE-([가-힣]{2,5})\([^)]+\)/);
+      if (topUserMatch?.[1]) return topUserMatch[1];
+      const calendarMatch = text.match(/개인캘린더\.([가-힣]{2,5})/);
+      if (calendarMatch?.[1]) return calendarMatch[1];
+    }
+    return "내 일정";
+  };
+  const hasMyScheduleOnlyFilter = () => {
+    const checkboxes = Array.from(document.querySelectorAll('input[type="checkbox"]'));
+    const myScheduleCheckbox = checkboxes.some((checkbox) => {
+      const containerText = normalizeText(checkbox.closest("label, div, li, dd, td")?.textContent ?? "");
+      return containerText.replace(/\s/g, "").includes("내일정만보기");
+    });
+    if (myScheduleCheckbox) return true;
+    return normalizeText(document.body?.innerText ?? "").replace(/\s/g, "").includes("내일정만보기");
+  };
   const parseWeeklyScheduleTable = () => {
     const items = [];
     const table = document.querySelector("#weekCalendar");
@@ -43,8 +146,39 @@
     }
     return items;
   };
+  const parseMyWeeklyScheduleView = () => {
+    if (!hasMyScheduleOnlyFilter()) return [];
+    const headers = getWeekDayHeaders();
+    if (headers.length < 5) return [];
+    const memberName = findCurrentMemberName();
+    const seen = /* @__PURE__ */ new Set();
+    return Array.from(document.querySelectorAll("div, a")).map((element) => {
+      const eventParts = getWeekEventParts(element);
+      const rect = getVisibleRect(element);
+      if (!eventParts || !rect || hasChildWeekEvent(element)) return null;
+      const date = findDateForEvent(rect, headers);
+      if (!date) return null;
+      const key = `${date}|${eventParts.timeRange}|${eventParts.title}`;
+      if (seen.has(key)) return null;
+      seen.add(key);
+      return {
+        date,
+        timeRange: eventParts.timeRange,
+        title: eventParts.title,
+        assignees: [memberName]
+      };
+    }).filter((item) => Boolean(item));
+  };
+  const parseCurrentScheduleView = () => {
+    const personalWeeklyItems = parseWeeklyScheduleTable();
+    if (personalWeeklyItems.length > 0) return personalWeeklyItems;
+    return parseMyWeeklyScheduleView();
+  };
   const isWeeklyPersonalView = () => {
     return !!document.querySelector("#weekCalendar");
+  };
+  const isSupportedScheduleView = () => {
+    return isWeeklyPersonalView() || parseMyWeeklyScheduleView().length > 0;
   };
   const DAILY_REGULAR_HOURS = 8;
   const WEEKLY_REGULAR_HOURS$1 = 40;
@@ -316,7 +450,7 @@
     });
     return [...set].sort((a, b) => a.localeCompare(b, "ko"));
   };
-  const renderSummaryTable = (memberRecord, allProjects) => {
+  const renderSummaryTable = (memberRecord, allProjects, notice) => {
     const headerCells = allProjects.map((p) => `<th style="color:${getProjectColor(p)}">${p}</th>`).join("");
     const rows = Object.entries(memberRecord).map(([name, projects]) => {
       const total = projects["합계"];
@@ -339,7 +473,10 @@
     }).join("");
     return `
     <div class="fsd-section">
-      <h3 class="fsd-section-title">요약</h3>
+      <div class="fsd-section-header">
+        <h3 class="fsd-section-title">요약</h3>
+        ${notice ? `<div class="fsd-view-notice">${notice}</div>` : ""}
+      </div>
       <div class="fsd-table-wrap">
         <table class="fsd-table">
           <thead>
@@ -436,11 +573,11 @@ ${pData.otTasks.map((t) => `- ${t}`).join("\n")}`;
     </div>
   `;
   };
-  const renderDashboard = (analytics) => {
+  const renderDashboard = (analytics, options = {}) => {
     document.getElementById(DASHBOARD_ID)?.remove();
     const { memberRecord, memberInsights } = analytics;
     const allProjects = collectAllProjects(memberRecord);
-    const summaryTable = renderSummaryTable(memberRecord, allProjects);
+    const summaryTable = renderSummaryTable(memberRecord, allProjects, options.notice);
     const detailPanels = Object.entries(memberRecord).map(([name, projects]) => {
       const insight = memberInsights[name];
       if (!insight) return "";
@@ -641,13 +778,33 @@ ${pData.otTasks.map((t) => `- ${t}`).join("\n")}`;
   background: var(--fsd-gray-50);
 }
 /* ===== Section ===== */
+#fsd-dashboard .fsd-section-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin: 0 0 16px;
+}
 #fsd-dashboard .fsd-section-title {
   font-size: 14px;
   font-weight: 600;
   letter-spacing: 0;
-  margin: 0 0 16px;
+  margin: 0;
   color: var(--fsd-gray-900);
   font-family: var(--fsd-font);
+}
+#fsd-dashboard .fsd-view-notice {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: block;
+  width: max-content;
+  color: var(--fsd-red);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: right;
+  white-space: nowrap !important;
 }
 /* ===== Summary Table ===== */
 #fsd-dashboard .fsd-table-wrap {
@@ -1048,14 +1205,18 @@ ${pData.otTasks.map((t) => `- ${t}`).join("\n")}`;
   const FAB_ID = "fsd-fab";
   const STYLES_ID = "fsd-styles";
   const OPEN_EVENT = "fsd:open-dashboard";
+  const OPEN_MESSAGE = "fsd:open-dashboard";
   const openDashboard = () => {
-    const items = parseWeeklyScheduleTable();
+    const isPersonalWeekly = isWeeklyPersonalView();
+    const items = parseCurrentScheduleView();
     if (items.length === 0) {
-      alert("일정 데이터를 찾을 수 없습니다.\n개인별 주간 뷰로 전환해주세요.");
+      alert("일정 데이터를 찾을 수 없습니다.\n개인별 주간 뷰 또는 주 탭에서 내일정만보기를 선택해주세요.");
       return false;
     }
     const analytics = buildScheduleAnalytics(items);
-    renderDashboard(analytics);
+    renderDashboard(analytics, {
+      notice: isPersonalWeekly ? "* 공동 일정 포함 확인은 주 탭 + 내일정만보기에서 진행해주세요." : void 0
+    });
     return true;
   };
   const createFab = () => {
@@ -1086,11 +1247,16 @@ ${pData.otTasks.map((t) => `- ${t}`).join("\n")}`;
     window.addEventListener(OPEN_EVENT, () => {
       openDashboard();
     });
-    if (isWeeklyPersonalView()) {
+    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+      if (message?.type !== OPEN_MESSAGE) return false;
+      sendResponse({ opened: openDashboard() });
+      return false;
+    });
+    if (isSupportedScheduleView()) {
       createFab();
     }
     const observer = new MutationObserver(() => {
-      if (isWeeklyPersonalView()) {
+      if (isSupportedScheduleView()) {
         createFab();
       } else {
         removeFab();

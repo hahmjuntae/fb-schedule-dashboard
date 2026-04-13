@@ -1,4 +1,4 @@
-import { parseWeeklyScheduleTable, isWeeklyPersonalView } from './parser';
+import { parseCurrentScheduleView, isSupportedScheduleView, isWeeklyPersonalView } from './parser';
 import { buildScheduleAnalytics } from '@/utils/schedule';
 import { renderDashboard, removeDashboard } from './dashboard';
 import cssText from '@/styles/dashboard.css?inline';
@@ -6,6 +6,7 @@ import cssText from '@/styles/dashboard.css?inline';
 const FAB_ID = 'fsd-fab';
 const STYLES_ID = 'fsd-styles';
 const OPEN_EVENT = 'fsd:open-dashboard';
+const OPEN_MESSAGE = 'fsd:open-dashboard';
 
 declare global {
   interface Window {
@@ -14,14 +15,19 @@ declare global {
 }
 
 const openDashboard = (): boolean => {
-  const items = parseWeeklyScheduleTable();
+  const isPersonalWeekly = isWeeklyPersonalView();
+  const items = parseCurrentScheduleView();
   if (items.length === 0) {
-    alert('일정 데이터를 찾을 수 없습니다.\n개인별 주간 뷰로 전환해주세요.');
+    alert('일정 데이터를 찾을 수 없습니다.\n개인별 주간 뷰 또는 주 탭에서 내일정만보기를 선택해주세요.');
     return false;
   }
 
   const analytics = buildScheduleAnalytics(items);
-  renderDashboard(analytics);
+  renderDashboard(analytics, {
+    notice: isPersonalWeekly
+      ? '* 공동 일정 포함 확인은 주 탭 + 내일정만보기에서 진행해주세요.'
+      : undefined,
+  });
   return true;
 };
 
@@ -53,7 +59,7 @@ const injectStyles = (): void => {
   document.head.appendChild(style);
 };
 
-/** 개인별 주간 뷰 감지 후 FAB 표시 */
+/** 지원 가능한 일정 뷰 감지 후 FAB 표시 */
 const init = (): void => {
   if (window.__FSD_CONTENT_INITIALIZED__) return;
   window.__FSD_CONTENT_INITIALIZED__ = true;
@@ -62,15 +68,20 @@ const init = (): void => {
   window.addEventListener(OPEN_EVENT, () => {
     openDashboard();
   });
+  chrome.runtime.onMessage.addListener((message: { type?: string }, _sender, sendResponse) => {
+    if (message?.type !== OPEN_MESSAGE) return false;
+    sendResponse({ opened: openDashboard() });
+    return false;
+  });
 
-  // 현재 페이지가 개인별 주간 뷰인지 확인
-  if (isWeeklyPersonalView()) {
+  // 현재 페이지가 지원 가능한 일정 뷰인지 확인
+  if (isSupportedScheduleView()) {
     createFab();
   }
 
   // DOM 변화 감시 (SPA 탐색 대응)
   const observer = new MutationObserver(() => {
-    if (isWeeklyPersonalView()) {
+    if (isSupportedScheduleView()) {
       createFab();
     } else {
       removeFab();
